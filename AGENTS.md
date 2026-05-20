@@ -153,6 +153,28 @@ All modes run web-search and the Librarian. Modes control only what happens in t
 
 ---
 
+## Commit Barrier
+
+Hydra agents never auto-commit or auto-merge to the base branch. Every execution produces
+a **merge proposal** — a reviewable artifact cataloging all changes. The user is the final
+adversary.
+
+### Process
+
+1. Agent(s) complete execution → proposal artifact written to `.hydra_experiments/proposal.md`
+2. Proposal contains: all agent diffs (not just the winner), test/linter results, discovery
+   tags, Tribunal reasoning (swarm mode), and a recommendation indicating which agent won
+3. User reviews the proposal — every diff is visible, every disqualification explained
+4. User runs `hydra approve <agent>` — this re-runs tests on the merged state (safety gate),
+   merges the winning branch, runs post-merge agents (Integrator in swarm mode, then Librarian
+   in all modes), and cleans up worktrees
+5. User may override the Tribunal recommendation via `hydra approve <other-agent>`. The
+   Tribunal is a suggestion, not a gate. The user is the final adversary.
+
+No agent-produced code reaches the base branch without explicit user approval.
+
+---
+
 ## Component Map
 
 | # | Component | Wiki Page | Status |

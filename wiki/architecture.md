@@ -57,11 +57,11 @@ Every Hydra execution follows this structure, regardless of mode:
                        │  Orchestrator Loop  │
                        │  (Layer 4)          │
                        │                     │
-                       │  Mode dispatch      │
-                       │  Phase sequencing   │
-                       │  Backtrack logic    │
-                       │  Winner merge       │
-                       │  Discovery routing  │
+     │  Mode dispatch      │
+     │  Phase sequencing   │
+     │  Backtrack logic    │
+     │  Proposal artifact  │
+     │  Discovery routing  │
                        │                     │
                        └──────┬──────┬───────┘
                               │      │
@@ -98,6 +98,56 @@ Every Hydra execution follows this structure, regardless of mode:
                             └─────────────────────┘     │  docs               │
                                                         └─────────────────────┘
 ```
+
+---
+
+## Commit Barrier: Proposal → Approve
+
+The orchestrator never auto-merges. It produces a proposal artifact and stops:
+
+```
+ACT completes → Proposal artifact (.hydra_experiments/proposal.md)
+  ├─ All agent diffs (not just winner)
+  ├─ Test/linter results per agent
+  ├─ Discovery tags per agent
+  ├─ Tribunal reasoning (swarm mode)
+  └─ Recommendation (which agent won)
+
+User reviews the proposal
+  │
+  ▼
+hydra approve <agent>
+  ├─ Re-run tests on merged state (safety gate)
+  ├─ git merge hydra/<agent>
+  ├─ Integrator (swarm only)
+  ├─ Librarian (all modes)
+  └─ Clean worktrees
+```
+
+Tribunal is a recommendation. User may override: `hydra approve <any-agent>`.
+
+---
+
+## Bootstrapping Strategy
+
+V1 ships in three phases. Each phase produces tooling that builds the next:
+
+```
+V0.1 (Quick)  ──builds──▶  V0.2 (Rigorous)  ──builds──▶  V1.0 (Swarm)
+     │                           │                          │
+     ├─ Layer 0: Contract        ├─ State machine parsing   ├─ Parallel agent spawning
+     ├─ Layer 1: Sandbox         ├─ 5-state monitoring      ├─ Evaluation Engine
+     ├─ Layer 2: Basic lifecycle ├─ Verify self-adversarial │─ Tribunal orchestration
+     ├─ Layer 4: Quick path      └─ V0.1 builds extensions  ├─ Integrator
+     ├─ Core: Librarian                                    └─ V0.2 builds extensions
+     └─ Commit barrier
+```
+
+| Phase | Tag | Components | Can be used to build |
+|-------|-----|------------|---------------------|
+| A: Quick | V0.1 | L0 + L1 + L2(basic) + L4(quick) + Core | Rigorous mode, Swarm mode |
+| B: Rigorous | V0.2 | + L2(state machine) + L4(rigorous) | Swarm mode |
+| C: Swarm | V1.0 | + L2(parallel) + L3 + L4(full) + Integrator | Target repos |
 
 ---
 
@@ -157,3 +207,5 @@ For V2 (staged DAGs), additional artifacts in `.hydra_artifacts/`.
 | 2026-05-20 | **Function-body imports banned** | Ubiquitous LLM anti-pattern. All imports at top of module. |
 | 2026-05-20 | **Session checklist** | Pre-flight gates for every Hydra dev session. Self-improving. |
 | 2026-05-20 | **Ingest + Retain are universal invariants** | Every execution runs web-search and the Librarian. Code is optional exhaust. |
+| 2026-05-20 | **Commit barrier** | Orchestrator never auto-merges. Produces proposal artifact. User approves explicitly. Tribunal is a suggestion, user is the final adversary. |
+| 2026-05-20 | **Bootstrapping strategy** | Quick (V0.1) → Rigorous (V0.2) → Swarm (V1.0). Each phase produces tooling that builds the next.

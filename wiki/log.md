@@ -4,6 +4,51 @@ Append-only chronological record. Every design decision, research finding, imple
 
 ---
 
+## [2026-05-20] design | Commit barrier, proposal artifact, bootstrapping strategy
+
+**Participants:** User + OpenCode agent
+**Duration:** ~30 minutes
+
+### Flow Summary
+
+1. **Commit barrier:** User identified that agent-produced code reaching the base branch without explicit review is a material safety concern. The legacy `hydra-legacy.sh` actually had this right — it prompted the user to manually `git merge`. The V1 architecture had lost this.
+
+2. **Proposal artifact:** Designed `.hydra_experiments/proposal.md` — a reviewable artifact cataloging ALL agent diffs (not just the winner), test/linter results, discovery tags, Tribunal reasoning, and a recommendation. The user reviews everything before approving.
+
+3. **`hydra approve <agent>`:** A separate command that re-runs tests on the merged state (safety gate — merged tests may differ from worktree tests), merges, runs post-merge agents, and cleans worktrees. Not a thin wrapper.
+
+4. **Tribunal is a suggestion:** User may override the Tribunal's recommendation via `hydra approve <other-agent>`. The user is the final adversary. All diffs are visible, all disqualifications explained.
+
+5. **Bootstrapping strategy:** Quick mode ships first because it exercises the full universal pipeline (Ingest → Retain) with minimal Act complexity. Once it works, it builds rigorous mode. Once rigorous works, it builds swarm mode. Hydra builds Hydra.
+
+   ```
+   V0.1 (Quick) → V0.2 (Rigorous) → V1.0 (Swarm)
+   ```
+
+### Decisions Made
+
+- Orchestrator never auto-merges. Stops at proposal artifact.
+- `hydra approve` re-verifies tests on the merged state before merging.
+- User can override Tribunal. All diffs visible. No hidden eliminations.
+- Bootstrapping: Quick → Rigorous → Swarm. Each phase produces tooling for the next.
+- "Code survives the machine, then survives the human" — Pillar 3 fully stated.
+
+### Files Modified
+
+- `AGENTS.md` — new "Commit Barrier" section with proposal process and `hydra approve` documentation
+- `wiki/philosophy.md` — "The Final Adversary: The User" section added under Pillar 3
+- `wiki/components/orchestrator-loop.md` — rewritten: proposal instead of merge, approve flow, proposal artifact format
+- `wiki/architecture.md` — Commit Barrier diagram, Bootstrapping Strategy diagram, two new key decisions
+- `wiki/versions/v1-scope.md` — restructured to three-phase bootstrapping attack order (A: Quick, B: Rigorous, C: Swarm)
+- `wiki/log.md` — this entry
+
+### Next Steps
+
+Phase A: Quick Mode (V0.1). Start with Layer 0 — Schema & Contract Pydantic types.
+Run `wiki/process/session-checklist.md` before any code.
+
+---
+
 ## [2026-05-20] session | Architecture restructure — Ingest → Act → Retain, Librarian as core component
 
 **Participants:** User + OpenCode agent

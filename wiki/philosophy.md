@@ -68,6 +68,18 @@ The 5-state machine:
 4. **Defender** — Write adversarial tests, harden code until it survives
 5. **Self-Evaluator** — Run tests/linters, loop back to Builder on failure
 
+### The Final Adversary: The User
+
+The 5-state machine proves code survives automated adversarial self-attack. The commit barrier ensures it survives the human before reaching the base branch.
+
+- Orchestrator never auto-merges. Code waits in a `.hydra_experiments/proposal.md` artifact.
+- The proposal catalogs all agent diffs with test results and Tribunal reasoning.
+- Tribunal is a recommendation, not a gate. The user may override.
+- `hydra approve` re-runs tests on the merged state before finalizing the merge.
+- Only after explicit user approval does code reach the base branch.
+
+Pillar 3, fully stated: "Code survives the machine, then survives the human."
+
 ---
 
 ## The Keystone: Knowledge Accumulation
