@@ -1,0 +1,16 @@
+[project]
+name = "hydra-swarm"
+version = "0.1.0"
+description = "Autonomous AI software factory — spawn parallel, adversarial LLM agent swarms"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+hydra = "hydra_swarm.cli:main"
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-data]
+"hydra_swarm" = ["prompts/*.md", "agents/*.md"]

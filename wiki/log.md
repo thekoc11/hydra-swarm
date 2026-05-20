@@ -4,6 +4,96 @@ Append-only chronological record. Every design decision, research finding, imple
 
 ---
 
+## [2026-05-20] implement | Orchestrator — lifecycle.md, tmux pipeline, subagent sequencing
+
+**Participants:** User + OpenCode agent
+**Duration:** ~1.5 hours
+
+### What was built
+
+- **orchestrator.py (~250 lines):** Tmux-based pipeline engine. Creates timestamped
+  lifecycle file. Launches architect in tmux window. Polls lifecycle.md for
+  `[HYDRA: CONVERGED]`. Parses contract.rigor.states. Sequences subagents via
+  `opencode run`. Adversary pause: asks user which flaws to fix. Proposal generation.
+  `approve()`: re-run tests, git commit, run librarian.
+
+- **cli.py:** Dispatch. `hydra <goal>` → orchestrator pipeline. `hydra approve [path]`
+  → approval + librarian + cleanup. `hydra --agent <name> <goal>` → direct agent
+  launch. `hydra` → interactive TUI with architect.
+
+- **6 agent prompts updated:** All agents now read `.hydra_experiments/current_lifecycle.txt`
+  for the lifecycle path, then read the lifecycle file for full execution context.
+  All agents append their output to the lifecycle file with completion signals.
+
+### Lifecycle model
+
+```
+hydra run "Add a /health endpoint"
+  → .hydra_experiments/hydra_lifecycle_<timestamp>.md
+  → .hydra_experiments/current_lifecycle.txt (pointer)
+
+Architect reads lifecycle.md → Goal → interrogates → CONVERGE → appends contract
+Builder reads lifecycle.md → sees Goal + Contract → implements → appends results
+Adversary reads lifecycle.md → sees Builder diff → finds flaws → appends
+  → Orchestrator asks user: "Which flaws to fix?"
+  → User: "1,3" → Greenlit appended
+Defender reads lifecycle.md → sees Greenlit → hardens → appends
+Proposal appended → hydra approve → tests → commit → librarian → done
+```
+
+### Files changed
+
+- `src/hydra_swarm/orchestrator.py` — **NEW**: pipeline engine
+- `src/hydra_swarm/cli.py` — **rewritten**: dispatch to orchestrator + approve + direct agent
+- `src/hydra_swarm/agents/*.md` — **all 6 updated**: lifecycle file read + append pattern
+- `.gitignore` — added `.opencode/agents/`
+- `4 .opencode/agents/*.md` — removed from git tracking (runtime artifacts)
+- `wiki/log.md` — this entry
+
+### Next Steps
+
+Test the full pipeline on a real project with `hydra run "Add a /health endpoint"`.
+Then Layer 0 — Pydantic types for contract validation.
+
+**Participants:** User + OpenCode agent
+**Duration:** ~30 minutes
+
+### Flow Summary
+
+1. **Pip as the shipping mechanism.** User wanted a clean, local way to reuse Hydra in other projects without global config changes. Pip install -e in a .venv keeps everything contained. No symlinks, no global ~/.config changes.
+
+2. **Minimal package structure created.** pyproject.toml + src/hydra_swarm/ with cli.py (~35 lines). Package data includes agents/*.md and prompts/*.md shipped with the install.
+
+3. **cli.py does three things on every run:**
+   - Copies subagent prompts into the project's .opencode/agents/ (first run only, idempotent)
+   - Creates .hydra_experiments/
+   - Launches opencode with the architect prompt + user's goal
+
+4. **Verified: pip install -e works.** hydra CLI on PATH. opencode launches with architect prompt.
+
+### Decisions Made
+
+- Package structure: pyproject.toml + src/hydra_swarm/ (standard layout)
+- Agents source of truth: src/hydra_swarm/agents/*.md (shipped with package)
+- Prompts source of truth: src/hydra_swarm/prompts/*.md (shipped with package)
+- Originals at prompts/ and .opencode/agents/ kept as immutable reference
+- Zero dependencies in pyproject.toml — pure stdlib for V0.1
+
+### Files
+
+- `pyproject.toml` — **NEW**
+- `src/hydra_swarm/__init__.py` — **NEW**
+- `src/hydra_swarm/cli.py` — **NEW** (~35 lines)
+- `src/hydra_swarm/agents/*.md` — copied from .opencode/agents/
+- `src/hydra_swarm/prompts/*.md` — copied from prompts/
+- `wiki/log.md` — this entry
+
+### Next Steps
+
+Manual run: test hydra on a real project. Then Layer 0 — Pydantic types for contract.json.
+
+---
+
 ## [2026-05-20] session | Subagent pipeline — native Task tool, user as evaluator, two modes
 
 **Participants:** User + OpenCode agent
