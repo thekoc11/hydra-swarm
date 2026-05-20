@@ -1,0 +1,15 @@
+.hydra_experiments/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+dist/
+*.egg-info/
+build/
+*.egg
+.DS_Store
+.env
+*.log
