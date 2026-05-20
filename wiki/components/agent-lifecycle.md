@@ -1,58 +1,74 @@
 # Agent Lifecycle
 
 ## Interface Contract
-- **Inputs:** Agent config (name, prompt, worktree path), system prompt (`prompts/headless_agent.md`), Master Plan (if swarm mode), user goal (if quick/rigorous)
-- **Outputs:** Agent process handle, parsed state transitions, completion/failure status, collected `[HYDRA_DISCOVERY]` tags
-- **Dependencies:** Sandbox Manager (Layer 1) — agents can only spawn in provisioned sandboxes
+- **Inputs:** Agent config (name, prompt, workdir), system prompt (`.opencode/agents/*.md`), contract (if default mode), Master Plan (if swarm mode)
+- **Outputs:** Subagent output, parsed completion signals, collected `[HYDRA_DISCOVERY]` tags
+- **Dependencies:** None for default mode. Sandbox Manager for swarm mode.
 
 ## Current Status
 DESIGN ONLY
 
 ## Design Decisions
 
-- [2026-05-19] Agent runtime is `opencode` CLI. Agents are launched via `opencode run --dir <worktree_path>` with the headless agent system prompt + task prompt.
-- [2026-05-19] State machine parsing: the orchestrator parses `[STATE TRANSITION: X -> Y]` from agent stdout to track progress. Completion signal: `[HYDRA: TASK COMPLETE]`.
-- [2026-05-20] **Discovery tag injection.** At spawn time, the orchestrator injects a discovery reporting rule into the agent's prompt (wrapping the immutable `headless_agent.md`). This tells the agent to log `[HYDRA_DISCOVERY] <finding>` for any project-level discovery. The orchestrator collects these tags from stdout and routes them to the Librarian. See log entry [2026-05-20].
-- [2026-05-20] **No framework self-tagging.** Agents do not classify findings as "framework" level. All discoveries are project-only and go to the Librarian. Hydra's own improvement is gated by the user during deliberate Hydra development sessions.
-- [2026-05-19] Parallel spawning: `asyncio.create_subprocess_exec` for concurrent agent execution.
-- [2026-05-19] Log capture: each agent's stdout/stderr is tee'd to `.hydra_experiments/<agent_name>.log`.
-- [2026-05-19] Timeout: agents have a configurable timeout. If an agent stalls in a state too long, it's killed and disqualified.
+- [2026-05-20] **Subagent pipeline for default mode.** The primary agent (plan mode) sequences subagents via the native opencode Task tool. No external plugins. Each subagent has a specific role, permissions profile, and system prompt in `.opencode/agents/`.
+- [2026-05-20] **User is the evaluator in default mode.** After each subagent completes, the user reviews output. User decides: CONVERGE (done) or re-trigger (fix this). No automated Self-Evaluator state.
+- [2026-05-20] **Rigor is contract-driven.** The Architect writes `rigor.states` into the contract. The primary agent reads the contract and spawns only the listed subagents. User sees and approves before CONVERGE.
+- [2026-05-19] Agent runtime is `opencode` CLI. Subagents are launched via the native Task tool.
+- [2026-05-20] **Execution model:** All agents run in attachable tmux windows. The orchestrator creates a tmux session with one window per subagent. The user may attach to any window at any time.
 
-### Injected Discovery Rule (at spawn time)
+## Execution Model
+
+### Default Mode Pipeline
 
 ```
-During execution, if you discover something that future agents working on this 
-same project would need to know — project conventions, quirks, architecture 
-decisions, pitfalls — log it as:
-
-[HYDRA_DISCOVERY] <finding>
-
-The tag is project-only. Do NOT attempt to classify findings as framework-level.
+┌──────────────────────────────────────────────┐
+│  PRIMARY (plan mode) — user is present       │
+│                                              │
+│  Architect:                                  │
+│    brave-search → verify → present → CONVERGE│
+│    Writes contract to .hydra_experiments/     │
+│                                              │
+│  ┌─ @blueprint (if contract says) ──────────┐│
+│  │  Plans. Returns roadmap. User reviews.   ││
+│  └──────────────────────────────────────────┘│
+│  ┌─ @builder ───────────────────────────────┐│
+│  │  Implements. Runs smoke tests. Reports.  ││
+│  └──────────────────────────────────────────┘│
+│  ┌─ @adversary (if contract says) ──────────┐│
+│  │  Finds flaws. Reports loudly. User       ││
+│  │  greenlights which to fix.               ││
+│  └──────────────────────────────────────────┘│
+│  ┌─ @defender (if contract says) ───────────┐│
+│  │  Writes tests for greenlit flaws.        ││
+│  │  Hardens code. Reports.                  ││
+│  └──────────────────────────────────────────┘│
+│                                              │
+│  User reviews all output                     │
+│    → CONVERGE → proposal → approve → librarian│
+│    → or: re-trigger @builder with flaw context │
+└──────────────────────────────────────────────┘
 ```
 
-### Quick Mode Differences
-- No 5-state machine. Agent just implements and runs tests.
-- Completion signal: process exit + tests pass.
-- Prompt is derived from user goal directly (no Master Plan needed).
-- Discovery tags still collected.
+### Subagent Permissions
 
-### Rigorous Mode Differences
-- Same 5-state machine as swarm agents, but only 1 agent.
-- No Architect phase required (or optional light interrogation).
-- Discovery tags still collected.
+| Subagent | edit | bash | websearch |
+|----------|------|------|-----------|
+| @blueprint | allow | deny | allow |
+| @builder | allow | allow | allow |
+| @adversary | deny | deny | allow |
+| @defender | allow | allow | allow |
+| @librarian | allow | allow | allow |
 
-## Open Questions / TODOs
-
-- What's the agent timeout? Default: 10 minutes for quick, 30 minutes for rigorous/swarm?
-- Should we stream agent logs to the user while agents run?
-- How to handle `opencode` not being installed? Graceful error.
-- Should we support other LLM runtimes or stick to opencode?
+### Swarm Mode (Deferred)
+- N headless agents in isolated git worktrees
+- Each runs full implementation autonomously
+- Tribunal (Bailiff + Judge) evaluates
+- User picks winner from proposal
 
 ## Implementation Notes
 
-- Implementation language: Python
-- Primary libraries: `asyncio`, `subprocess`
-- File: `src/hydra_swarm/agent_lifecycle.py`
-- State machine transitions to track: INIT→1, 1→2, 2→3, 3→4, 4→5, 5→2 (loop), 5→COMPLETE
-- Discovery tag regex: `\[HYDRA_DISCOVERY\]\s*(.*)`
-- Must handle: agent crashes, no state transitions, invalid state sequence
+- Primary agent: opencode in plan mode with `prompts/architect.md`
+- Subagents: defined in `.opencode/agents/*.md`, invoked via Task tool
+- Contract path: `.hydra_experiments/contract.json`
+- Completion signals: `[BUILDER: COMPLETE]`, `[ADVERSARY: N FLAWS FOUND]`, `[DEFENDER: COMPLETE]`
+- Discovery tag: `[HYDRA_DISCOVERY]` — collected by primary agent, queued for Librarian

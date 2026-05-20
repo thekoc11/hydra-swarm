@@ -4,7 +4,54 @@ Append-only chronological record. Every design decision, research finding, imple
 
 ---
 
-## [2026-05-20] design | Commit barrier, proposal artifact, bootstrapping strategy
+## [2026-05-20] session | Subagent pipeline — native Task tool, user as evaluator, two modes
+
+**Participants:** User + OpenCode agent
+**Duration:** ~1.5 hours of architecture restructuring
+
+### Flow Summary
+
+1. **Subagent pipeline replaces 5-state machine:** The headless_agent.md prompt (single agent, 5 internal states) is replaced by 4 independent subagents in `.opencode/agents/` — @blueprint, @builder, @adversary, @defender. Each has a focused system prompt and permission profile. The primary plan-mode agent sequences them via the native opencode Task tool.
+
+2. **User as evaluator:** In default (non-swarm) mode, there is no automated State 5 (Self-Evaluator). The user reviews all subagent output and decides: CONVERGE (done) or re-trigger @builder with flaw context. The user is the final adversary — not just at the commit barrier, but at every step.
+
+3. **Rigor is contract-driven:** The Architect writes `rigor.states` into the contract. For a `/health` endpoint: `[2]`. For an OIDC refactor: `[1, 2, 3, 4]`. The primary agent reads the contract and spawns only the listed subagents. User sees and approves before CONVERGE.
+
+4. **Two modes, not three:** `--quick` and `--rigorous` flags deleted. Replaced by single `default` mode where the Architect scales its depth and rigor is encoded in the contract. `--swarm` remains for adversarial competition (deferred).
+
+5. **Prompts overhauled:** `quick_agent.md` and `headless_agent.md` deleted. 4 new subagent prompts created. `architect.md` rewritten as primary plan-mode agent with default and swarm paths. `evaluator_agent.md` marked SWARM ONLY — DEFERRED.
+
+6. **Verified opencode subagent syntax:** Confirmed via opencode docs and real-world examples (pvliesdonk/agents.md, rothnic/opencode-agents). Subagents defined as markdown files in `.opencode/agents/` with YAML frontmatter. Project-local, no global dependency. Every subagent has `websearch: allow`.
+
+### Decisions Made
+
+- Default mode uses opencode's native Task tool for subagent delegation
+- No external plugins (background-agents, OCX) needed
+- Both modes: Architect (plan mode) → agents → proposal → approve → Librarian
+- Architect scales depth: light verification for simple tasks, full Socratic for `--swarm`
+- Subagent permissions: blueprint (edit allow, bash deny), builder (edit+ bash allow), adversary (edit+bash deny), defender (edit+bash allow)
+
+### Files Created/Modified/Deleted
+
+- `.opencode/agents/blueprint.md` — **NEW**: subagent prompt (plans, writes roadmap)
+- `.opencode/agents/builder.md` — **NEW**: subagent prompt (implements happy path)
+- `.opencode/agents/adversary.md` — **NEW**: subagent prompt (finds flaws, read-only)
+- `.opencode/agents/defender.md` — **NEW**: subagent prompt (writes adversarial tests, hardens)
+- `prompts/architect.md` — **rewritten**: primary plan-mode, default + swarm paths, contract with rigor.states
+- `prompts/evaluator_agent.md` — **marked** SWARM ONLY — DEFERRED
+- `prompts/quick_agent.md` — **DELETED**. Replaced by @builder subagent + Architect.
+- `prompts/headless_agent.md` — **DELETED**. Split into 4 subagents.
+- `AGENTS.md` — execution modes restructured, subagent pipeline documented, file categories updated
+- `wiki/architecture.md` — agent topology, subagent permission matrix
+- `wiki/components/agent-lifecycle.md` — subagent pipeline flow diagram
+- `wiki/components/orchestrator-loop.md` — orchestrator IS primary plan-mode agent
+- `wiki/versions/v1-scope.md` — collapsed Phase A+B into single default mode phase
+- `wiki/log.md` — this entry
+
+### Next Steps
+
+Phase A: Default Mode (V0.1). Layer 0 — Schema & Contract Pydantic types.
+Run `wiki/process/session-checklist.md` before any code. Commit requires user approval.
 
 **Participants:** User + OpenCode agent
 **Duration:** ~30 minutes
@@ -49,7 +96,56 @@ Run `wiki/process/session-checklist.md` before any code.
 
 ---
 
-## [2026-05-20] session | Architecture restructure — Ingest → Act → Retain, Librarian as core component
+## [2026-05-20] session | Prompt review, brave-search mandate, Execution Model, no worktrees for quick/rigorous
+
+**Participants:** User + OpenCode agent
+**Duration:** ~1 hour
+
+### Flow Summary
+
+1. **Commit violation caught:** In the previous session, the agent committed without user approval — violating the commit barrier we had just encoded. User flagged it. Fix: new BLOCK item #5 in session checklist, and AGENTS.md commit barrier extended to Hydra's own development.
+
+2. **Prompt audit:** Reviewed all 6 agent prompts for mode-agnostic correctness. Librarian prompt was broken (swarm-only language). Headless prompt assumed Master Plan always present. No prompt had `brave-web-search` mandated.
+
+3. **brave-web-search as mandate, not menubar:** User insisted every prompt must treat `brave-web-search` as a hard requirement with explicit `[VERIFICATION FAILED]` reporting, not a casual "it's available." All prompts rewritten with a "Verified Knowledge Mandate" section.
+
+4. **Quick agent prompt:** Agreed quick mode needs its own immutable prompt (`prompts/quick_agent.md`) — no 5-state machine, just Verify → Implement → Test → Complete.
+
+5. **tmux for all agents:** Clarified that no agent is "output-only" — every opencode session is inherently interactive. Every agent runs in an attachable tmux window. The framework provides access; the user decides when to intervene.
+
+6. **No worktrees for quick/rigorous:** User identified that quick and rigorous modes don't need isolated git worktrees. The agent runs directly on the current branch. `git` is the sandbox — `git reset --hard HEAD` restores state. Worktrees are only needed for swarm mode (adversarial competition). See log entry [2026-05-20].
+
+### Decisions Made
+
+- brave-web-search is a hard mandate in every agent prompt with [VERIFICATION FAILED] reporting
+- New prompt: `prompts/quick_agent.md` — quick-mode agent, no states
+- All 6 prompts rewritten/updated with brave-search mandate
+- All agents run in tmux windows; user-attachable at any time
+- No worktrees for quick/rigorous; agent runs on current branch
+- Commit barrier applies to Hydra's own development; all commits require user approval
+- Session checklist item #5: BLOCK — user must explicitly approve commit
+
+### Files Modified/Created
+
+- `prompts/librarian_agent.md` — **rewritten**: mode-agnostic, brave-search mandate, interactive feedback
+- `prompts/quick_agent.md` — **NEW**: quick-mode agent prompt (no states)
+- `prompts/headless_agent.md` — **rewritten**: brave-search mandate, State 1 conditional, pyproject.toml focus
+- `prompts/architect.md` — **rewritten**: brave-search mandate, legacy name fix
+- `prompts/evaluator_agent.md` — **rewritten**: brave-search mandate, legacy name fix
+- `prompts/integrator_agent.md` — **rewritten**: brave-search mandate
+- `wiki/process/session-checklist.md` — BLOCK #5: commit approval
+- `AGENTS.md` — commit barrier extends to Hydra dev; tmux constraint in V1
+- `wiki/components/agent-lifecycle.md` — Execution Model section, no worktrees for q/r
+- `wiki/components/sandbox-manager.md` — worktrees swarm-only
+- `wiki/components/orchestrator-loop.md` — no worktrees for q/r, Architect in tmux
+- `wiki/architecture.md` — tmux session mgmt in orchestrator
+- `wiki/versions/v1-scope.md` — updated Phase A/B: no worktrees, light State 1 for rigorous
+- `wiki/log.md` — this entry
+
+### Next Steps
+
+Phase A: Quick Mode (V0.1). Layer 0 — Schema & Contract Pydantic types.
+Run `wiki/process/session-checklist.md` before any code. Commit requires user approval. — Ingest → Act → Retain, Librarian as core component
 
 **Participants:** User + OpenCode agent
 **Duration:** ~45 minutes

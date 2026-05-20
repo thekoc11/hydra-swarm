@@ -11,6 +11,7 @@ DESIGN ONLY
 ## Design Decisions
 
 - [2026-05-19] V1: Python-only. Sandbox = `git worktree` + `python -m venv` or `uv venv`. This avoids the "missing environments" failure from the Bash MVP.
+- [2026-05-20] **Worktrees only for swarm mode.** Quick and rigorous modes operate directly on the current branch. The user's venv and git are the sandbox — no separate worktree. `git reset --hard HEAD` restores state if the agent produces bad code. See log entry [2026-05-20].
 - [2026-05-19] Dep installation: `uv pip install -e ".[dev,test]"` if `pyproject.toml` has those extras, else `uv pip install -e .`. Discover extras from config, never guess.
 - [2026-05-19] Worktree lifecycle: create (`git worktree add`), branch (`-b hydra/<agent_name>`), cleanup (`git worktree remove --force`, `git branch -D`).
 - [2026-05-19] `.hydra_experiments/` is the root for all ephemeral agent workspaces. Must be gitignored.
@@ -23,7 +24,8 @@ DESIGN ONLY
 
 ## Open Questions / TODOs
 
-- Should venvs be created with `--system-site-packages` or fully isolated? Lean: fully isolated.
+- Quick/rigorous: should the orchestrator verify the venv exists and has dev deps installed before running?
+- Swarm mode: worktrees with venvs per agent. Should venvs be fully isolated or `--system-site-packages`?
 - What happens when `pyproject.toml` has no `[project.optional-dependencies]` for test/dev? Just `pip install -e .` ?
 - How to handle target repos that use poetry/PDM instead of pip? V1: detect and use correct tool. V2: abstract.
 - Should we cache common packages (e.g., pytest, ruff) across venvs to speed up provisioning?

@@ -37,17 +37,21 @@ Design sessions (no code written) may skip items tagged "code-only" without logg
 - [ ] At least one trivial smoke test passes (verifies environment works)
 - [ ] Test directory structure exists (`tests/`)
 
-### 5. Commit Anchor (BLOCK)
+### 5. Commit Approval (BLOCK)
+- [ ] User explicitly approved this commit — all diffs reviewed, yes/no confirmed
+- [ ] If no: pause. Show diff. Wait for approval. Never auto-commit.
+
+### 6. Commit Anchor (BLOCK)
 - [ ] Previous session's state is committed (rollback point exists)
 - [ ] No uncommitted drift from a prior session
 - [ ] `git log --oneline -3` shows coherent history
 
-### 6. Runtime Verification (BLOCK — code-only)
+### 7. Runtime Verification (BLOCK — code-only)
 - [ ] `opencode --version` returns expected version (or version is pinned/documented)
 - [ ] Python version meets minimum requirement (3.10+)
 - [ ] `uv` available or `python -m venv` functional
 
-### 7. Code Quality (BLOCK — enforced at review, not at gate)
+### 8. Code Quality (BLOCK — enforced at review, not at gate)
 - [ ] No function-body imports in any source file (Pillar 1: fix architecture, not the import)
 - [ ] All imports at the top of their module
 - [ ] No `sys.path` manipulation, no `PYTHONPATH` hacks
@@ -62,3 +66,4 @@ Design sessions (no code written) may skip items tagged "code-only" without logg
 | 2026-05-20 | Created | Initial checklist from AGENTS.md design process |
 | 2026-05-20 | Item 2 — Repo Hygiene | Discovered: wiki scaffold session skipped .gitignore and git commit |
 | 2026-05-20 | Item 7 — function-body import ban | Discovered: "local imports" rule was ambiguous. Clarified to function-body import anti-pattern. |
+| 2026-05-20 | Item 5 — commit approval | Discovered: agent committed without user review. Violated commit barrier. All commits now require explicit approval. |

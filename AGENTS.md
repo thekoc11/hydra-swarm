@@ -8,7 +8,8 @@ This document tells any LLM agent (OpenCode, Claude Code, Codex, etc.) how to wo
 
 Hydra Swarm is an **autonomous AI software factory** — a Python orchestrator that spawns parallel, adversarial LLM agent swarms to implement features, fix bugs, and write tests in target repositories.
 
-V1 scope: Python-only target repos. Three execution modes (quick, rigorous, swarm). Flat adversarial topology (no staged DAGs yet).
+V1 scope: Python-only target repos. Two execution modes (default, swarm). Subagent-based
+pipeline. Flat adversarial topology for swarm mode (no staged DAGs yet).
 
 ---
 
@@ -55,6 +56,7 @@ Every design decision, implementation choice, and agent behaviour must align wit
 |----------|--------|------|
 | `README.md` | Original design spec | **Immutable.** Read only. Do not edit. |
 | `prompts/*.md` | System prompts for Hydra's LLM agents | **Immutable.** Read only. Do not edit. |
+| `.opencode/agents/*.md` | Subagent configurations for Hydra's Task tool | **Immutable.** Read only. Do not edit. |
 | `AGENTS.md` | This file | Co-evolve with the wiki. Edit when workflows or conventions change. |
 | `wiki/` | LLM-maintained knowledge base | **You own this.** Read and write freely. |
 | `wiki/log.md` | Chronological session log | **Append only** after every meaningful action. |
@@ -122,6 +124,8 @@ DESIGN ONLY | IN PROGRESS | IMPLEMENTED | TESTED
 - **Linter:** `ruff`, `mypy`.
 - **Agent runtime:** `opencode` CLI (current dependency).
 - **IPC between agents:** None in V1. Flat adversarial — agents compete, not coordinate.
+- **Execution model:** All agents run in attachable tmux windows. The user may attach to any window at any time. The framework provides access; the user decides when to intervene.
+- **Subagent pipeline:** Non-swarm agents run as opencode subagents (`.opencode/agents/*.md`) via the native Task tool. No external plugin dependency. Architect runs in plan mode (primary). Builder, Adversary, Defender run as subagents.
 
 ### Python sandbox rules (for implementation agents)
 
@@ -145,11 +149,26 @@ This is a **project-only** tag. Agents must NOT attempt to classify findings as 
 
 All modes run web-search and the Librarian. Modes control only what happens in the Act stage.
 
-| Mode | Ingest | Act | Retain |
-|------|--------|-----|--------|
-| `quick` | Web-search for versions, API validation | 1 agent implements, runs tests | Librarian: discoveries + diff into project docs |
-| `rigorous` | Web-search + optional planning | 1 agent runs 5-state machine | Librarian: discoveries + patterns + diff |
-| `swarm` | Web-search + Architect interrogation | N adversarial agents + Tribunal + Integrator | Librarian: full architecture extraction + plan deletion |
+### Default Mode (non-swarm)
+Architect (plan mode, interactive) → subagent pipeline → user evaluates → proposal → approve → Librarian.
+
+| Stage | Agent | Permission | Mode |
+|-------|-------|-----------|------|
+| Ingest | Architect | edit: deny, bash: deny, websearch: allow | Primary (plan mode) |
+| Act | @blueprint, @builder, @adversary, @defender | per contract.rigor.states | Subagents (Task tool) |
+| Evaluate | User | Full visibility into all subagent output | The final adversary |
+| Retain | @librarian | edit: allow, bash: deny, websearch: allow | Subagent |
+
+### Swarm Mode (--swarm)
+Architect (full Socratic interrogation) → N adversarial agents in worktrees → Tribunal → proposal → approve → Integrator → Librarian.
+
+| Stage | Agent | Permission |
+|-------|-------|-----------|
+| Ingest/Plan | Architect | edit: deny, bash: deny, websearch: allow |
+| Act | N headless agents (isolated worktrees) | Full write + bash + websearch |
+| Evaluate | Tribunal (Bailiff + Judge) | Bailiff: bash, Judge: tool-less |
+| Integrate | Integrator | Full write + bash + websearch |
+| Retain | Librarian | Full write + websearch |
 
 ---
 
@@ -173,6 +192,10 @@ adversary.
 
 No agent-produced code reaches the base branch without explicit user approval.
 
+This applies equally to Hydra's own development. Wiki changes, configuration, system
+prompts — nothing reaches `git commit` without explicit user approval. The agent
+proposes; the user decides.
+
 ---
 
 ## Component Map
@@ -182,9 +205,9 @@ No agent-produced code reaches the base branch without explicit user approval.
 | 0 | Schema & Contract | `wiki/components/schema-contract.md` | DESIGN ONLY |
 | 1 | Sandbox Manager | `wiki/components/sandbox-manager.md` | DESIGN ONLY |
 | 2 | Agent Lifecycle | `wiki/components/agent-lifecycle.md` | DESIGN ONLY |
-| 3 | Evaluation Engine | `wiki/components/evaluation-engine.md` | DESIGN ONLY |
+| 3 | Evaluation Engine | `wiki/components/evaluation-engine.md` | DESIGN ONLY (Swarm deferred) |
 | 4 | Orchestrator Loop | `wiki/components/orchestrator-loop.md` | DESIGN ONLY |
-| 5 | Integrator | `wiki/components/integrator.md` | DESIGN ONLY |
+| 5 | Integrator | `wiki/components/integrator.md` | DESIGN ONLY (Swarm deferred) |
 | C | **Librarian (Core)** | `wiki/components/librarian.md` | DESIGN ONLY |
 
 ## Framework Self-Improvement
