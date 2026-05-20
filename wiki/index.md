@@ -8,8 +8,8 @@ Catalog of all wiki pages. Updated on every ingest or structural change.
 
 | Page | Summary | Status |
 |------|---------|--------|
-| [philosophy.md](philosophy.md) | The three pillars: Intent is permanent, no decision without verification, code survives the machine | STABLE |
-| [architecture.md](architecture.md) | High-level architecture: 5-phase pipeline, 3 execution modes, component topology, discovery routing | STABLE |
+| [philosophy.md](philosophy.md) | Three pillars + Universal Invariant (Ingest + Retain always run). The keystone. | STABLE |
+| [architecture.md](architecture.md) | Universal pipeline (Ingest → Act → Retain), component topology, discovery routing, mode matrix | STABLE |
 
 ## Process
 
@@ -25,8 +25,9 @@ Catalog of all wiki pages. Updated on every ingest or structural change.
 | [components/sandbox-manager.md](components/sandbox-manager.md) | Git worktree + venv lifecycle for isolated agent workspaces | DESIGN ONLY |
 | [components/agent-lifecycle.md](components/agent-lifecycle.md) | Agent spawner, state machine parser, discovery tag injection | DESIGN ONLY |
 | [components/evaluation-engine.md](components/evaluation-engine.md) | Gauntlet runner, defender penalty check, diff extractor, judge delegation | DESIGN ONLY |
-| [components/orchestrator-loop.md](components/orchestrator-loop.md) | Main engine: phase sequencing, backtrack, winner merge, cleanup | DESIGN ONLY |
-| [components/post-merge.md](components/post-merge.md) | Integrator (swarm-only) + Librarian (universal post-execution gate) | DESIGN ONLY |
+| [components/orchestrator-loop.md](components/orchestrator-loop.md) | Main engine: mode dispatch, phase sequencing, backtrack, winner merge | DESIGN ONLY |
+| [components/integrator.md](components/integrator.md) | E2E test materialization from Sanity Mandates (swarm mode only) | DESIGN ONLY |
+| [components/librarian.md](components/librarian.md) | **Core.** Knowledge accumulation engine. Runs after every mode. Project permanent docs. | DESIGN ONLY |
 
 ## Version Plans
 

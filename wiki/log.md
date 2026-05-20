@@ -4,6 +4,46 @@ Append-only chronological record. Every design decision, research finding, imple
 
 ---
 
+## [2026-05-20] session | Architecture restructure — Ingest → Act → Retain, Librarian as core component
+
+**Participants:** User + OpenCode agent
+**Duration:** ~45 minutes
+
+### Flow Summary
+
+1. **The Universal Invariant:** User identified that web-search and the Librarian are not "features" — they are constants that run in every Hydra execution, regardless of mode. Re-architected the pipeline from "5 phases where Phase 4 is the Librarian" to "Ingest (always) → Act (mode-dependent) → Retain (always)."
+
+2. **Librarian as keystone:** User argued the Librarian is not an appendage to the Integrator — it's the mechanism that makes the three pillars actually deliver their promise across multiple executions. Without it, every Hydra run is amnesiac. Elevated from Layer 5 to a standalone core component.
+
+3. **Code is optional exhaust:** Explicitly codified that a Hydra execution may produce zero code (e.g., `hydra research "compare streaming approaches"`). Web-search and the Librarian still run. The output is knowledge, not code.
+
+4. **Architecture re-centered:** `wiki/architecture.md` refactored around `Ingest → Act → Retain`. New mode matrix shows exactly what runs in each stage per mode. The Librarian is shown as a convergence point, not a final cleanup step.
+
+5. **Component map unified:** `AGENTS.md` component map now lists 7 components with the Librarian tagged as Core. The `post-merge.md` page is a redirect to the two standalone pages.
+
+### Files
+
+- `wiki/philosophy.md` — **rewritten**: added "The Universal Invariant" section, "The Keystone: Knowledge Accumulation" section
+- `wiki/architecture.md` — **rewritten**: Ingest → Act → Retain pipeline, mode matrix, Librarian as convergence point
+- `wiki/components/librarian.md` — **NEW**: standalone core component. Interface contract, lightweight + full pass workflows, research-only mode.
+- `wiki/components/integrator.md` — **NEW**: standalone swarm-only component. Interface contract, running order (pre-Librarian).
+- `wiki/components/post-merge.md` — **redirect** to librarian.md and integrator.md
+- `AGENTS.md` — **rewritten**: Universal Invariant section, execution modes table with Ingest/Act/Retain columns, component map with Librarian as Core
+- `wiki/index.md` — updated catalog with new pages
+- `wiki/log.md` — this entry
+
+### Previous Decisions Reaffirmed
+- Discovery tags remain project-only
+- Framework improvement remains user-gated
+- Session checklist remains the pre-flight protocol
+- Function-body import ban remains in Python sandbox rules
+
+### Next Steps
+- Layer 0: Schema & Contract Pydantic types. The interface every other component depends on.
+- Before that: run `wiki/process/session-checklist.md` per AGENTS.md, then commit.
+
+---
+
 ## [2026-05-20] session | Process refinement — session checklist, discovery routing, Librarian universalization
 
 **Participants:** User + OpenCode agent

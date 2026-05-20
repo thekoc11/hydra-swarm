@@ -27,6 +27,19 @@ Every design decision, implementation choice, and agent behaviour must align wit
 
 ---
 
+## The Universal Invariant
+
+**Every Hydra execution always does two things:**
+
+| Stage | What | Why |
+|-------|------|-----|
+| **Ingest** | Web-search for version verification, API validation, library viability | Pillar 2: No decision without verification |
+| **Retain** | Librarian extracts knowledge and compounds it into project permanent docs | Pillar 1: Intent is permanent |
+
+**Everything else is mode-dependent.** Code is optional exhaust — sometimes there is none, and that's valid.
+
+---
+
 ## How to Read This Project
 
 ### Startup sequence (every session)
@@ -130,15 +143,13 @@ This is a **project-only** tag. Agents must NOT attempt to classify findings as 
 
 ## Execution Modes
 
-| Mode | Pipeline | Agents |
-|------|----------|--------|
-| `quick` | Spawn → implement → run tests → Librarian → done | 1 agent, no states, just do it |
-| `rigorous` | Spawn → 5-state machine → Librarian → done | 1 agent, self-adversarial |
-| `swarm` | Architect → N agents → Tribunal → Integrator → Librarian | Full pipeline |
+All modes run web-search and the Librarian. Modes control only what happens in the Act stage.
 
-All modes allow `brave-web-search`. The mode controls implementation rigor, not access to verification.
-
-**The Librarian runs after every mode.** It is not swarm-only. In quick and rigorous modes, it captures agent discoveries and diff-based changes to the project's permanent docs. In swarm mode, it additionally runs after the Integrator and deletes ephemeral plan files.
+| Mode | Ingest | Act | Retain |
+|------|--------|-----|--------|
+| `quick` | Web-search for versions, API validation | 1 agent implements, runs tests | Librarian: discoveries + diff into project docs |
+| `rigorous` | Web-search + optional planning | 1 agent runs 5-state machine | Librarian: discoveries + patterns + diff |
+| `swarm` | Web-search + Architect interrogation | N adversarial agents + Tribunal + Integrator | Librarian: full architecture extraction + plan deletion |
 
 ---
 
@@ -151,7 +162,8 @@ All modes allow `brave-web-search`. The mode controls implementation rigor, not 
 | 2 | Agent Lifecycle | `wiki/components/agent-lifecycle.md` | DESIGN ONLY |
 | 3 | Evaluation Engine | `wiki/components/evaluation-engine.md` | DESIGN ONLY |
 | 4 | Orchestrator Loop | `wiki/components/orchestrator-loop.md` | DESIGN ONLY |
-| 5 | Post-Merge (Integrator + Librarian) | `wiki/components/post-merge.md` | DESIGN ONLY |
+| 5 | Integrator | `wiki/components/integrator.md` | DESIGN ONLY |
+| C | **Librarian (Core)** | `wiki/components/librarian.md` | DESIGN ONLY |
 
 ## Framework Self-Improvement
 

@@ -4,44 +4,50 @@ High-level design decisions and component topology for the Hydra Swarm orchestra
 
 ---
 
-## Execution Modes
+## The Universal Pipeline
 
-The orchestrator supports three modes of increasing rigor. All modes inherit the Verified Knowledge Principle (brave-search always available). **The Librarian runs after every mode.**
-
-### Quick Mode
-- 1 agent spawned in an isolated sandbox
-- Reads the user's goal directly (no Architect, no Master Plan)
-- Implements, runs project tests, reports success/failure
-- No state machine. No adversary. No judge.
-- **Librarian:** captures discoveries and diff-based changes, updates project permanent docs
-- For: boilerplate, trivial tasks, "I know exactly what I want"
-
-### Rigorous Mode
-- 1 agent spawned in an isolated sandbox
-- Optionally: light interrogation to clarify requirements
-- Executes the full 5-state machine (Blueprint → Builder → Adversary → Defender → Self-Evaluator)
-- Self-adversarial. No competition. No judge.
-- **Librarian:** captures discoveries, diff-based changes, and 5-state machine patterns
-- For: Non-trivial tasks where approach is clear but quality matters
-
-### Swarm Mode (Full Pipeline)
-- Phase 0: Architect — Socratic interrogation → `Master_Plan.md` + `swarm_contract.json`
-- Phase 1: N headless agents in parallel isolated worktrees, each running 5-state machine
-- Phase 2: Tribunal — Bailiff runs objective tests + defender penalty check, Judge evaluates surviving diffs
-- Phase 3: Integrator — materializes Top-Level Sanity Mandates into E2E tests
-- Phase 4: Librarian — full pass: extracts architecture lessons, updates permanent docs, deletes ephemeral plan
-- Backtrack: if swarm fails, re-invoke Architect with failure diagnosis
-- For: Ambiguous, high-stakes tasks where multiple strategies are worth exploring
-
-### Mode Selection
+Every Hydra execution follows this structure, regardless of mode:
 
 ```
-hydra run "Add a /health endpoint"                   # defaults to quick
-hydra run --rigorous "Refactor auth middleware"       # rigorous
-hydra run --swarm "Design real-time event streaming"  # full swarm
+┌──────────────────┐
+│     INGEST       │  ← ALWAYS
+│                  │
+│  Web-search      │     Verify versions, validate APIs, check library viability
+│  Version check   │     Every agent has brave-web-search
+│  Research        │     Pillar 2: No decision without verification
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│      ACT         │  ← MODE-DEPENDENT
+│                  │
+│  Plan (optional) │     Architect interrogation → Master_Plan.md
+│  Code (optional) │     5-state machine implementation
+│  Evaluate        │     Tribunal, Judge (swarm only)
+│  Integrate       │     E2E tests (swarm only)
+│                  │
+│  May produce zero code. That's valid.            │
+│  Pillar 3: Code survives the machine             │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│     RETAIN       │  ← ALWAYS
+│                  │
+│  Librarian       │     Extract discoveries, architectural changes, research
+│  Knowledge       │     Compound into project permanent docs (LLM_WIKI.md)
+│  accumulation    │     Pillar 1: Intent is permanent. Code is exhaust.
+└──────────────────┘
 ```
 
----
+## Mode Matrix
+
+| Mode | Ingest | Act | Retain |
+|------|--------|-----|--------|
+| `quick` | Web-search for versions, API validation | 1 agent implements, runs tests | Librarian captures discoveries + diff into project docs |
+| `rigorous` | Web-search + optional planning | 1 agent runs full 5-state machine | Librarian captures discoveries + 5-state patterns + diff |
+| `swarm` | Web-search + Architect Socratic interrogation | N adversarial agents + Tribunal + Integrator | Librarian full pass: architecture extraction, discoveries, plan deletion |
+| `research` | Full web-search, library comparison, version audit | None | Librarian files research findings to project docs |
 
 ## Component Topology
 
@@ -51,6 +57,7 @@ hydra run --swarm "Design real-time event streaming"  # full swarm
                        │  Orchestrator Loop  │
                        │  (Layer 4)          │
                        │                     │
+                       │  Mode dispatch      │
                        │  Phase sequencing   │
                        │  Backtrack logic    │
                        │  Winner merge       │
@@ -67,7 +74,7 @@ hydra run --swarm "Design real-time event streaming"  # full swarm
     │  Spawn agent    │                  │  Gauntlet runner    │
     │  Parse state    │                  │  Defender check     │
     │  Monitor logs   │                  │  Diff extractor     │
-    │  Collect discov  │                  │  Judge delegation   │
+    │  Collect discov.│                  │  Judge delegation   │
     └────────┬────────┘                  └─────────────────────┘
              │
              ▼
@@ -81,27 +88,16 @@ hydra run --swarm "Design real-time event streaming"  # full swarm
     │  Cleanup        │
     └─────────────────┘
 
-    ┌─────────────────┐         ┌─────────────────────┐
-    │  Schema/Contract│         │  Post-Merge          │
-    │  (Layer 0)      │         │  (Layer 5)           │
-    │                 │         │                     │
-    │  Contract types │         │  Integrator (swarm) │
-    │  Validation     │         │  Librarian (all)    │
-    └─────────────────┘         └─────────────────────┘
+    ┌─────────────────┐     ┌─────────────────────┐     ┌─────────────────────┐
+    │  Schema/Contract│     │  Integrator          │     │  Librarian          │
+    │  (Layer 0)      │     │  (Swarm only)        │     │  (Core — all modes) │
+    │                 │     │                     │     │                     │
+    │  Contract types │     │  E2E test material-  │     │  Knowledge          │
+    │  Validation     │     │  ization from Sanity │     │  accumulation       │
+    └─────────────────┘     │  Mandates            │     │  Project permanent  │
+                            └─────────────────────┘     │  docs               │
+                                                        └─────────────────────┘
 ```
-
----
-
-## Data Flow
-
-1. User input → **Orchestrator Loop** determines mode
-2. If `swarm` mode → **Schema/Contract** (`swarm_contract.json`) parsed
-3. For each agent → **Sandbox Manager** creates isolated worktree + venv
-4. **Agent Lifecycle** spawns the LLM with injected discovery rule, parses state transitions, monitors completion, collects `[HYDRA_DISCOVERY]` tags
-5. Results → **Evaluation Engine** runs objective tests, extracts diffs, delegates to judge
-6. Winner → **Orchestrator Loop** merges, cleans up losers
-7. Post-execution → **Librarian** (all modes) captures discoveries and architectural changes into project permanent docs
-8. Swarm mode only: **Integrator** materializes E2E tests from Sanity Mandates before Librarian
 
 ---
 
@@ -114,9 +110,10 @@ Agent stdout
   ├─ [HYDRA_DISCOVERY] <finding> → Collected, queued for Librarian
   └─ [HYDRA: TASK COMPLETE]      → Orchestrator marks done
 
-Librarian (post-execution, all modes):
+Librarian (post-execution, always):
   ├─ Reads collected discoveries
   ├─ Reads git diff of changes
+  ├─ Reads Master_Plan.md (swarm mode)
   └─ Updates project permanent docs (docs/LLM_WIKI.md)
 ```
 
@@ -155,7 +152,8 @@ For V2 (staged DAGs), additional artifacts in `.hydra_artifacts/`.
 | 2026-05-19 | Verified Knowledge as third pillar | Every agent needs search. Not optional, not mode-gated. |
 | 2026-05-19 | Wiki-first development | Journal before code. The LLM wiki pattern is the progress protocol. |
 | 2026-05-19 | Artifact-based IPC for V2 | No sockets, no message queues. Files on disk. |
-| 2026-05-20 | **Librarian is universal** | Runs after every mode, not just swarm. Captures discoveries + diffs to project permanent docs. |
-| 2026-05-20 | **User-gated framework improvement** | Agents do not self-tag framework discoveries. Only the user files Hydra improvements during Hydra dev sessions. |
-| 2026-05-20 | **Function-body imports banned** | Ubiquitous LLM anti-pattern. All imports at top of module. Fix architecture, not the import. |
-| 2026-05-20 | **Session checklist** | Pre-flight gates for every Hydra dev session. Self-improving — each new skip class encoded. |
+| 2026-05-20 | **Librarian is universal** | Runs after every mode. Knowledge accumulation engine. Maps to `llm__wiki.md` Retain cycle. |
+| 2026-05-20 | **User-gated framework improvement** | Agents do not self-tag framework discoveries. User is the sole gate. |
+| 2026-05-20 | **Function-body imports banned** | Ubiquitous LLM anti-pattern. All imports at top of module. |
+| 2026-05-20 | **Session checklist** | Pre-flight gates for every Hydra dev session. Self-improving. |
+| 2026-05-20 | **Ingest + Retain are universal invariants** | Every execution runs web-search and the Librarian. Code is optional exhaust. |
