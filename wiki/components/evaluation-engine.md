@@ -1,7 +1,7 @@
 # Evaluation Engine
 
 ## Interface Contract
-- **Inputs:** Contract (`swarm_contract.json`), list of agent worktrees and their names
+- **Inputs:** Contract (from lifecycle markdown `## Architect` section), list of agent worktrees and their names
 - **Outputs:** Verdict JSON (`SUCCESS` with winner, `FAILED` with diagnosis, or `PENDING_JUDGE`)
 - **Dependencies:** Agent Lifecycle (Layer 2) — agents must complete before evaluation begins
 
@@ -17,9 +17,11 @@ DESIGN ONLY
 - [2026-05-19] Short-circuit: if ALL agents fail in Phase 1 or Phase 2, return `FAILED` immediately. No judge needed.
 - [2026-05-19] Judge delegation: the orchestrator (not the evaluator) runs `llm_judge.md` with the `judge_input.txt`. The evaluator just prepares the payload.
 
-### Quick/Rigorous Mode
-- Evaluation is simpler: just run project tests. No bailiff, no judge.
-- For rigorous mode, the agent's self-evaluation (State 5) is the primary gate. The orchestrator just confirms tests pass one final time.
+## Quick/Rigorous Mode (V1.0 — Default Mode)
+- Evaluation is conversational: the Adversary reports flaws in terminal (read-only). Hermes captures output via `tmux capture-pane` and formats the flaws with `[FLAW]` severity tags.
+- The user greenlights which flaws to fix in conversation with Hermes.
+- The Defender (adaptive: Hermes for small scope, OpenCode tmux for large) hardens the code.
+- Tests are run from the `test_command` discovered by the Architect and encoded in the lifecycle contract.
 
 ## Open Questions / TODOs
 

@@ -19,15 +19,15 @@ Read `.hydra_experiments/current_lifecycle.txt` — it contains the path to the
 active lifecycle file. Read that lifecycle file. Find the `## Goal`, the
 `## Architect` Contract, and the `## Builder` section (contains the diff).
 
-When done: append to the lifecycle file:
-```
-## Adversary
+When done: report flaws in this session. End with `[ADVERSARY: N FLAWS FOUND]`
+on its own line. Do NOT write any files. Do NOT append to the lifecycle file.
+Hermes will capture your terminal output and write the lifecycle.
+
+Format each finding as:
 [FLAW] CRITICAL <description>
 [FLAW] HIGH <description>
 [FLAW] MEDIUM <description>
 [FLAW] LOW <description>
-[ADVERSARY: N FLAWS FOUND]
-```
 
 ## THE VERIFIED KNOWLEDGE MANDATE
 You MUST use brave-web-search to validate EVERY vulnerability hypothesis:
@@ -45,4 +45,4 @@ If web search surfaces confirmed vulnerabilities, escalate the severity.
 4. Search externally for known vulnerabilities in the libraries/patterns used.
 5. Report every finding. Do not filter. Do not fix. Do not write code.
 6. Format each finding as: [FLAW] <CRITICAL|HIGH|MEDIUM|LOW> <description>
-7. Group by severity. CRITICAL first. Append to lifecycle file.
+7. Group by severity. CRITICAL first. Output findings to terminal. Do NOT write files.

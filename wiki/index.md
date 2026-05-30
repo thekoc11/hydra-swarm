@@ -21,13 +21,14 @@ Catalog of all wiki pages. Updated on every ingest or structural change.
 
 | Page | Summary | Status |
 |------|---------|--------|
-| [components/schema-contract.md](components/schema-contract.md) | `swarm_contract.json` types, validation, versioning | DESIGN ONLY |
+| [components/schema-contract.md](components/schema-contract.md) | Lifecycle markdown contract with named phases. Architect authors conversationally. | REDESIGNED (V1.0) |
 | [components/sandbox-manager.md](components/sandbox-manager.md) | Git worktree + venv lifecycle for isolated agent workspaces | DESIGN ONLY |
-| [components/agent-lifecycle.md](components/agent-lifecycle.md) | Agent spawner, state machine parser, discovery tag injection | DESIGN ONLY |
-| [components/evaluation-engine.md](components/evaluation-engine.md) | Gauntlet runner, defender penalty check, diff extractor, judge delegation | DESIGN ONLY |
-| [components/orchestrator-loop.md](components/orchestrator-loop.md) | Main engine: mode dispatch, phase sequencing, backtrack, winner merge | DESIGN ONLY |
-| [components/integrator.md](components/integrator.md) | E2E test materialization from Sanity Mandates (swarm mode only) | DESIGN ONLY |
-| [components/librarian.md](components/librarian.md) | **Core.** Knowledge accumulation engine. Runs after every mode. Project permanent docs. | DESIGN ONLY |
+| [components/agent-lifecycle.md](components/agent-lifecycle.md) | Hermes conductor + OpenCode agents. User-driven handoffs, consolidated sessions, adaptive defender. | IMPLEMENTED (V1.0) |
+| [components/evaluation-engine.md](components/evaluation-engine.md) | Gauntlet runner, defender penalty check, diff extractor, judge delegation | DESIGN ONLY (Swarm deferred) |
+| [components/architect.md](components/architect.md) | Hermes skill: Socratic verification, two-stage convergence, two-backend verification, contract authoring | IMPLEMENTED (V1.0) |
+| [components/orchestrator-loop.md](components/orchestrator-loop.md) | Hermes conductor + skills. Paradigm shifts: user-driven, named phases, conversational greenlighting, adaptive defender. | IMPLEMENTED (V1.0) |
+| [components/integrator.md](components/integrator.md) | E2E test materialization from Sanity Mandates (swarm mode only) | DESIGN ONLY (Swarm deferred) |
+| [components/librarian.md](components/librarian.md) | **Core.** Hermes conversational skill. Cross-reference, contradiction flagging, wiki compounding. Runs after every mode. | IMPLEMENTED (V1.0) |
 
 ## Version Plans
 

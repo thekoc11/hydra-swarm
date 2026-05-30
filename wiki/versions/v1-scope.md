@@ -14,7 +14,7 @@ for swarm mode.
 - **Sandbox:** `uv venv` or `python -m venv` + `uv pip install` or `pip install -e ".[dev,test]"`.
 - **Test runner:** `pytest`. Discovered from `pyproject.toml`, never guessed.
 - **Linter:** `ruff`, `mypy`.
-- **Agent runtime:** `opencode` CLI (current dependency).
+- **Agent runtime:** `opencode` CLI + **Hermes Agent** (V1.0 conductor). Hermes provides conversational orchestration; OpenCode provides specialized coding agents.
 - **Subagent runtime:** Native opencode Task tool. No external plugins.
 - **Commit barrier:** Orchestrator never auto-merges. Proposal artifact → user approval → merge.
 
@@ -23,23 +23,23 @@ for swarm mode.
 ## Phased Attack Order
 
 ```
-Phase A: Default Mode (V0.1)  ──builds──▶  Phase B: Swarm Mode (V1.0)
+V1.0 (Default Mode — IMPLEMENTED)  ──builds──▶  V2.0 (Swarm Mode)
 ```
 
-### Phase A: Default Mode → V0.1
+### Phase A: Default Mode → V1.0 (Implemented)
 
 | Component | What's built |
 |-----------|-------------|
-| Layer 0 — Schema & Contract | Pydantic types for contract.json. Factory for auto-generated default contracts. |
-| Layer 1 — Sandbox Manager | Verify current venv has dev deps. Swarm mode: worktree create/branch/cleanup. |
-| Layer 2 — Agent Lifecycle | Subagent pipeline: @blueprint, @builder, @adversary, @defender via Task tool. User as evaluator. |
-| Layer 4 — Orchestrator Loop | Primary plan-mode agent. Architect → subagent sequence → proposal → approve. |
-| Core — Librarian | @librarian subagent. Discoveries + git diff → project docs. |
-| CLI | `hydra run <goal>` (default). `hydra approve`. `hydra --help`. |
+| Layer 0 — Schema & Contract | Lifecycle markdown contract with named phases (`[impl]`, `[impl, adversary]`, `[impl, adversary, defender]`). Architect authors conversationally. |
+| Architect (new) | Hermes `hydra-architect` skill: Socratic verification, two-stage convergence, two-backend verification, directive injection. |
+| Conductor | Hermes `hydra-proceed` skill: launches OpenCode agents in tmux, user-driven handoffs, conversational greenlighting, adaptive defender. |
+| Agent Lifecycle | Blueprint+Builder consolidated (one tmux, Task subagent). Adversary (separate tmux, `edit:deny`). Defender (adaptive threshold). |
+| Core — Librarian | Hermes `hydra-librarian` skill: cross-reference, contradiction flagging, conversational refinement, wiki updates. |
+| CLI | `cli.py` argparse rewrite (~180 lines). `hydra run`/`proceed`/`retain`/`resume`/`--agent`. |
 
-Success: `hydra run "Add a /health endpoint"` — Architect verifies and presents. @builder implements. User reviews and CONVERGEs. Proposal → approve → @librarian → Done.
+Success: `hydra run "enhance orchestrator"` — Architect verifies and produces deep contract. Proceed launches blueprint+builder in tmux. Adversary finds flaws. User greenlights. Defender hardens. Librarian compounds to wiki. User approves commit.
 
-### Phase B: Swarm Mode → V1.0
+### Phase B: Swarm Mode → V2.0
 
 | Component | What's built |
 |-----------|-------------|

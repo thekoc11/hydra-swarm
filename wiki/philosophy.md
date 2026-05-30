@@ -17,8 +17,8 @@ Everything else is mode-dependent:
 
 | | When |
 |---|------|
-| **Plan** (Architect, Socratic interrogation) | Only when the task is ambiguous — swarm mode, or rigorous with user-requested planning |
-| **Code** (implementation, 5-state machine) | Only when the task requires code output |
+| **Plan** (Architect, Socratic interrogation) | When the task is ambiguous or the scope warrants structured planning |
+| **Code** (implementation, adversarial review) | Only when the task requires code output |
 | **Evaluate** (Tribunal, Judge) | Only in swarm mode — adversarial competition |
 | **Integrate** (E2E test materialization) | Only in swarm mode — requires Master Plan Sanity Mandates |
 
@@ -30,7 +30,7 @@ A `hydra research "compare streaming approaches"` invocation produces zero code.
 
 LLMs do not have intuition. If an autonomous agent encounters code that bypasses a standard convention to handle a systemic constraint, the agent will assume the code is "bad" and attempt to "fix" it, introducing catastrophic regressions.
 
-**Therefore:** Before any code is written, the exact architectural "Why" must be explicitly hammered into plain-English documentation — either `Master_Plan.md` (for swarm tasks) or wiki pages (for the framework itself). Code is a byproduct of this knowledge base.
+**Therefore:** Before any code is written, the exact architectural "Why" must be explicitly hammered into plain-English documentation — the lifecycle markdown (V1.0) or wiki pages (for the framework itself). Code is a byproduct of this knowledge base.
 
 If an agent encounters code without documented intent, it files a wiki entry before touching anything.
 
@@ -40,7 +40,7 @@ If an agent encounters code without documented intent, it files a wiki entry bef
 
 No assumption survives unchecked. Every library version, API claim, architectural pattern, version compatibility constraint, or toolchain assumption must be validated against external reality before entering the knowledge base.
 
-**All agents have `brave-web-search` and `webfetch`.** These are not optional, not conditional, not mode-gated. Every agent searches first, files findings, then acts.
+**All agents have search capability.** This is not optional, not conditional, not mode-gated. Every agent searches first, files findings, then acts.
 
 This applies to:
 - Library versions and deprecations
@@ -57,26 +57,22 @@ When code IS produced, it earns its right to exist by surviving adversarial self
 
 | Mode | Rigor |
 |------|-------|
-| `quick` | Run tests, if they pass, ship |
-| `rigorous` | Full 5-state machine (Blueprint → Builder → Adversary → Defender → Self-Evaluator) |
-| `swarm` | Full pipeline: Architect → N competing agents (5-state each) → Tribunal → Integrator |
+| Default | Pipeline phases determined by Architect: `[impl]` for straightforward features, `[impl, adversary]` for auditing, `[impl, adversary, defender]` for security-critical or complex changes |
+| Swarm (deferred) | Full pipeline: Architect → N competing agents → Tribunal → Integrator |
 
-The 5-state machine:
-1. **Blueprint** — Socratic planning, codebase exploration, command discovery
-2. **Builder** — Happy path implementation, verify basic functionality
-3. **Adversary** — Drop write tools, find flaws, formulate attacks
-4. **Defender** — Write adversarial tests, harden code until it survives
-5. **Self-Evaluator** — Run tests/linters, loop back to Builder on failure
+The pipeline phases:
+- **`impl`** — Blueprint plans, Builder implements (same session). Verifies basic functionality.
+- **`adversary`** — Independent agent (different mind) finds flaws. Read-only — reports in terminal, never touches files.
+- **`defender`** — Writes adversarial tests, hardens code until it survives. Adaptive: small scopes handled conversationally, large scopes get isolated context.
 
 ### The Final Adversary: The User
 
-The 5-state machine proves code survives automated adversarial self-attack. The commit barrier ensures it survives the human before reaching the base branch.
+Automated adversarial self-attack proves code survives the machine. The commit barrier ensures it survives the human before reaching the base branch.
 
-- Orchestrator never auto-merges. Code waits in a `.hydra_experiments/proposal.md` artifact.
-- The proposal catalogs all agent diffs with test results and Tribunal reasoning.
-- Tribunal is a recommendation, not a gate. The user may override.
-- `hydra approve` re-runs tests on the merged state before finalizing the merge.
-- Only after explicit user approval does code reach the base branch.
+- No agent-produced code reaches the base branch without explicit user approval.
+- After the pipeline completes, the user reviews all output in the lifecycle.
+- The Librarian presents findings and asks: "Commit? (yes/no)."
+- Only after explicit user approval does code reach `git commit`.
 
 Pillar 3, fully stated: "Code survives the machine, then survives the human."
 
@@ -88,11 +84,11 @@ The three pillars produce ephemeral output unless retained. The Librarian is the
 
 | Pillar | Without Librarian | With Librarian |
 |--------|-------------------|----------------|
-| Intent is permanent | `Master_Plan.md` deleted. Intent lost. | Architecture extracted to permanent docs. Intent survives. |
+| Intent is permanent | Architectural intent lost after execution. | Architecture extracted to permanent docs. Intent survives. |
 | No decision without verification | Verified version pin lost. Next run rediscovers. | Version finding filed. Future agents read the wiki. |
 | Code survives the machine | Code survives *this time*. The *why* is forgotten. | Adversary finding + Defender fix + rationale filed. Knowledge accumulates. |
 
-The Librarian is not a fourth pillar — it's the structural binding agent that makes the three pillars deliver their promise across multiple executions. It maps directly to the `llm__wiki.md` Ingest → Retain cycle, applied at the target-project level.
+The Librarian is not a fourth pillar — it's the structural binding agent that makes the three pillars deliver their promise across multiple executions. It maps directly to the `llm__wiki.md` Ingest → Retain cycle, applied at the framework level.
 
 ---
 

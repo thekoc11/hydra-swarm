@@ -22,9 +22,11 @@ Implement from there.
 When done: append to the lifecycle file:
 ```
 ## Builder
-Files changed: <list>
+Files changed:
+<output of: git diff --stat>
+
 Tests run: N. Passing: N.
-<git diff summary or relevant output>
+@githash or relevant output
 [BUILDER: COMPLETE]
 ```
 

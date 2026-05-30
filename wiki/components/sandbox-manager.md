@@ -3,7 +3,7 @@
 ## Interface Contract
 - **Inputs:** Agent name, base branch, path to target repository
 - **Outputs:** Fully provisioned, isolated worktree with venv and installed dependencies, ready for agent execution
-- **Dependencies:** Schema & Contract (Layer 0) — needs `swarm_contract.json` to know the target repo.
+- **Dependencies:** Schema & Contract (Layer 0) — needs contract (from lifecycle `## Architect` section) to know the target repo.
 
 ## Current Status
 DESIGN ONLY

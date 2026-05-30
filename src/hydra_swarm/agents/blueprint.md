@@ -18,7 +18,7 @@ Read `.hydra_experiments/current_lifecycle.txt` — it contains the path to the
 active lifecycle file. Read that lifecycle file. Find the `## Goal` and the
 `## Architect` section containing the Contract. Plan from there.
 
-When done: append to the lifecycle file:
+When done: because you have `edit: allow`, append your roadmap directly to the lifecycle file:
 ```
 ## Blueprint
 <your roadmap>

@@ -48,6 +48,8 @@ Design sessions (no code written) may skip items tagged "code-only" without logg
 
 ### 7. Runtime Verification (BLOCK — code-only)
 - [ ] `opencode --version` returns expected version (or version is pinned/documented)
+- [ ] `hermes --version` returns v0.15.1+ (V1.0 conductor dependency)
+- [ ] `skills/` directory integrity: three hydra skills present (`hydra-architect`, `hydra-proceed`, `hydra-librarian`) with valid YAML frontmatter
 - [ ] Python version meets minimum requirement (3.10+)
 - [ ] `uv` available or `python -m venv` functional
 
@@ -67,3 +69,4 @@ Design sessions (no code written) may skip items tagged "code-only" without logg
 | 2026-05-20 | Item 2 — Repo Hygiene | Discovered: wiki scaffold session skipped .gitignore and git commit |
 | 2026-05-20 | Item 7 — function-body import ban | Discovered: "local imports" rule was ambiguous. Clarified to function-body import anti-pattern. |
 | 2026-05-20 | Item 5 — commit approval | Discovered: agent committed without user review. Violated commit barrier. All commits now require explicit approval. |
+| 2026-05-31 | Item 7 — Hermes dependency | V1.0 Hermes Pivot: Hermes Agent is now a runtime dependency. Checklist extended with Hermes version check and skills directory integrity. |

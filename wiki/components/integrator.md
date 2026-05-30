@@ -1,7 +1,7 @@
 # Integrator — E2E Test Materialization (Swarm Only)
 
 ## Interface Contract
-- **Inputs:** Merged winning code, `Master_Plan.md` (containing Top-Level Sanity Mandates), `swarm_contract.json`
+- **Inputs:** Merged winning code, lifecycle contract (from `## Architect` section containing Top-Level Sanity Mandates)
 - **Outputs:** E2E integration tests materialized from Sanity Mandates. Pass/fail report (`[HYDRA INTEGRATION: SUCCESS]` or `[HYDRA INTEGRATION: FAILED]`).
 - **Dependencies:** Orchestrator Loop (Layer 4) — only runs after a winner is merged in swarm mode.
 
@@ -17,8 +17,8 @@ DESIGN ONLY
 ### Agent Flow
 
 ```
-1. Read Master_Plan.md → extract "Top-Level Sanity Mandates"
-2. Read swarm_contract.json → understand the overarching goal
+1. Read lifecycle `## Architect` section → extract "Top-Level Sanity Mandates" and contract
+2. Understand the overarching goal from the lifecycle
 3. Explore tests/ → discover project testing framework and conventions
 4. For each Sanity Mandate, write an executable E2E integration test
 5. Create test files in tests/e2e/ or tests/integration/ (never modify app code)
