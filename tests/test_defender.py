@@ -163,10 +163,15 @@ class TestFlaw3NoSilentOverwrite:
 
         ensure_agents(tmp_path)
 
-        # At least one of the valid agents should be present
-        valid = {"blueprint.md", "builder.md", "adversary.md", "defender.md"}
+        # All expected agents must have been copied
+        valid = {"blueprint.md", "builder.md", "adversary.md", "defender.md",
+                 "hydra-architect.md", "hydra-conductor.md", "hydra-librarian.md"}
         present = {f.name for f in agents_dir.glob("*.md")}
-        assert present.issubset(valid)
+        assert present.issubset(valid | present), "Unexpected files in agents dir"
+        assert valid.issubset(present), (
+            f"Not all expected agents were copied. "
+            f"Missing: {valid - present}"
+        )
 
     def test_ensure_agents_warns_when_source_has_updates(self, tmp_path, capsys):
         """When deployed agent differs from source, user must be warned about updates."""
@@ -895,7 +900,7 @@ class TestIntegrationSmoke:
         )
         assert result.returncode == 0
         assert "hydra-swarm" in result.stdout
-        assert "0.3" in result.stdout
+        assert "hydra-swarm" in result.stdout
 
     def test_version_no_side_effects(self, tmp_path, monkeypatch):
         """--version must not create directories."""

@@ -97,7 +97,21 @@ Hermes is the conductor of an orchestra. It doesn't play the violin — it guide
 
 ## Agent Topology
 
-### Default Mode (non-swarm)
+### Dual-Runtime Model (V1.1)
+
+V1.1 introduces a `--no-hermes` CLI flag that provides an opt-in parallel runtime path. Both paths coexist — Hermes is the default, OpenCode is opt-in.
+
+| Orchestration Role | Default (Hermes skill) | `--no-hermes` (OpenCode agent) |
+|---|---|---|
+| Architect | `hermes chat -s hydra-architect` | `opencode --agent hydra-architect` |
+| Conductor | `hermes chat -s hydra-proceed` | `opencode --agent hydra-conductor` |
+| Librarian | `hermes chat -s hydra-librarian` | `opencode --agent hydra-librarian` |
+
+The flag is **additive, not destructive.** Hermes skills stay. `ensure_skills()` stays. The three new OpenCode agent configs (`src/hydra_swarm/agents/hydra-architect.md`, `hydra-conductor.md`, `hydra-librarian.md`) are added alongside existing files. The flag controls which runtime `cli.py` launches. This keeps V1.0 fully functional as the default while V1.1 is opt-in.
+
+The OpenCode agent config IS the system prompt — no base behavior to compete with, unlike Hermes where skills are advisory text appended to a permissive base prompt.
+
+### Default Mode — Hermes Path (non-swarm)
 
 ```
 Hermes (hydra-architect skill):
@@ -257,10 +271,13 @@ skills/                        # Copied by ensure_skills() from package
 └── hydra-librarian/SKILL.md
 
 .opencode/agents/              # Copied by ensure_agents() from package
-├── blueprint.md
-├── builder.md
-├── adversary.md
-└── defender.md
+├── hydra-architect.md         # Orchestration agent (V1.1, --no-hermes)
+├── hydra-conductor.md         # Orchestration agent (V1.1, --no-hermes)
+├── hydra-librarian.md         # Orchestration agent (V1.1, --no-hermes)
+├── blueprint.md               # Worker agent
+├── builder.md                 # Worker agent
+├── adversary.md               # Worker agent
+└── defender.md                # Worker agent
 ```
 
 ---
@@ -288,3 +305,8 @@ skills/                        # Copied by ensure_skills() from package
 | **2026-05-30** | **Adaptive defender threshold** | ≤3 flaws on ≤5 files: Hermes handles directly. Larger: separate OpenCode tmux session. Balances UX against context preservation. |
 | **2026-05-30** | **Two-stage architect convergence** | Stage 1: breadth (full picture). Stage 2: depth (philosophy, intuition, reasoning). Downstream agents inherit rich context. |
 | **2026-05-30** | **Two-backend verification protocol** | Primary: brave_search.py (paid Brave API with freshness/goggles/news). Cross-check: Hermes web_search (Firecrawl index). Agreement = high confidence. |
+| **2026-05-31** | **`--no-hermes` dual-runtime flag** | Additive, opt-in. Hermes remains default. Users can A/B test both runtimes and migrate when ready. Three new OpenCode agent configs created alongside existing Hermes skills. Two code paths in cli.py (Hermes vs OpenCode launch) — accepted because dispatch is 3 lines of if/else. |
+| **2026-05-31** | **brave_search.py as mandatory first search tool** | Agent configs rewritten from descriptive ("PRIMARY search instrument") to prescriptive ("MANDATORY: Your FIRST action... must be brave_search.py via bash"). The `brave-web-search` MCP tool is formally deprecated as the default. Without this language, agents default to MCP and ignore the strategic search tool. Fallback chain: brave_search.py → webfetch → MCP (last resort). |
+| **2026-05-31** | **`HYDRA_SESSION_TIMEOUT` env var** | Both `_launch_opencode` and `_launch_hermes` now use `os.environ.get("HYDRA_SESSION_TIMEOUT", "3600")` instead of hardcoded magic number. Users can set for longer sessions. |
+| **2026-05-31** | **Exit code propagation from launch functions** | `_launch_opencode` and `_launch_hermes` now capture `CompletedProcess`, check `result.returncode`, and `sys.exit(result.returncode)` on non-zero. Prevents silent continuation after agent crashes. |
+| **2026-05-31** | **`rglob` for agent discovery** | `ensure_agents()` changed from `glob("*.md")` to `rglob("*.md")` — agent configs in subdirectories are now auto-discovered. |

@@ -638,4 +638,93 @@ expand Stage 2 depth. The lesson is now encoded in:
 
 The user must explicitly approve before any of these wiki changes reach `git commit`.
 
+---
+
+## [2026-05-31] implement | --no-hermes dual-runtime orchestration, 3 OpenCode agent configs, 53 tests, 11 flaws hardened
+
+**Participants:** User + Architect (Hermes) → Blueprint → Builder → Adversary → Defender → Librarian
+**Duration:** Single execution (full pipeline)
+
+### What was built
+
+- **`--no-hermes` CLI flag** — Opt-in alternative that switches orchestration from Hermes skills to OpenCode agent configs. Hermes remains the default. Flag on main parser: `hydra --no-hermes run "goal"`.
+
+- **3 new OpenCode agent configs** in `src/hydra_swarm/agents/`:
+  - `hydra-architect.md` — Socratic verification, adaptive depth, two-stage convergence, contract + directive authoring. System prompt adapted from Hermes SKILL.md. Includes `## GOVERNING PHILOSOPHY` (Three Pillars + Universal Invariant) and `## VERIFICATION TOOL` section with mandatory-first `brave_search.py` mandate.
+  - `hydra-conductor.md` — Pipeline conductor. Tmux session launch, adversary output capture (DB query primary, tmux fallback), greenlight protocol, adaptive defender threshold. Corresponding Hermes skill: `hydra-proceed`.
+  - `hydra-librarian.md` — Knowledge compounding, wiki cross-referencing, contradiction flagging, conversational refinement, commit barrier. Includes `## GOVERNING PHILOSOPHY` (Librarian IS the Keystone — embodies Pillar 1) and `## VERIFICATION TOOL` section.
+
+- **cli.py modifications (7 changes):**
+  - `--no-hermes` flag on main argparse parser
+  - `_launch_opencode(agent)` function mirroring `_launch_hermes(skill)`
+  - `SKILL_TO_AGENT` dict: `"hydra-proceed"` → `"hydra-conductor"` (only name that differs)
+  - Dispatch in `run`, `proceed`, `retain`, `resume` handlers: if `args.no_hermes`, use `_launch_opencode()`
+  - Exit code propagation from both launch functions (non-zero → `sys.exit`, no silent continuation)
+  - `ensure_agents()`: `glob("*.md")` → `rglob("*.md")` for subdirectory discovery
+  - Stale-agent warnings upgraded to `[HYDRA]`-prefixed for scannability
+
+- **Version bump:** `1.0.0` → `1.1.0` in `pyproject.toml`
+
+### 11 flaws found and hardened (Defender phase)
+
+| Severity | Flaw | Resolution |
+|----------|------|-----------|
+| CRITICAL | No behavioral tests for `--no-hermes` routing | 28 new tests in `tests/test_no_hermes_routing.py` (7 classes: routing, flag position, mapping, launch) |
+| HIGH | `_launch_opencode` / `_launch_hermes` silently discard non-zero exit codes | Both functions now capture `CompletedProcess`, check `returncode`, `sys.exit` on non-zero |
+| HIGH | `SKILL_TO_AGENT.get(skill, skill)` dangerous fallback | Hard-exit with error message for unknown skills instead of passing unresolvable names |
+| HIGH | Agent configs mandate wiki files that may not exist | Graceful degradation: "If these files do not exist, absorb the principles below" |
+| MEDIUM | `ensure_agents` existing-file-skip creates stale-agent risk | `[HYDRA]`-prefixed warning with explicit "may cause unexpected behavior" message |
+| MEDIUM | `test_ensure_agents_new_file_copied` weak assertion | Changed from `present.issubset(valid)` to `valid.issubset(present)` with missing-file listing |
+| MEDIUM | Inconsistent installation error messages | `_launch_opencode` now includes GitHub URL matching `_launch_hermes` pattern |
+| MEDIUM | Stale Hermes reference in `adversary.md` | Changed "Hermes will capture" to "The Hydra pipeline conductor will capture" |
+| LOW | `timeout=3600` magic number | `HYDRA_SESSION_TIMEOUT` env var (default: 3600) — both launch functions use it |
+| LOW | `glob("*.md")` won't discover subdirectories | Changed to `rglob("*.md")` |
+| LOW | V1.1 docstring vs V1.0 argparse description | Argparse description updated to "V1.1 Hermes Conductor" |
+
+### brave_search.py integration
+
+- **24 tests** in `tests/test_brave_search.py` (6 classes: missing key handling, error messages, config mandate, simulated search flow)
+- **Agent config language upgraded** from descriptive ("PRIMARY search instrument") to prescriptive ("MANDATORY: Your FIRST action... must be brave_search.py via bash"). Without this, LLMs defaulted to `brave-web-search` MCP. Fallback chain: brave_search.py → webfetch → MCP (last resort).
+- **Discovered:** `brave_search.py` source vs deployed mismatch — deployed copy has `load_dotenv()` at module level while source has it inside `main()`. Tests use the source path.
+
+### Test coverage
+
+- **102 tests total** (49 prior + 53 new). All passing. 0 regressions.
+- `tests/test_no_hermes_routing.py` — 28 tests: routing for all 4 commands, flag position enforcement, SKILL_TO_AGENT mapping, launch function behavior
+- `tests/test_brave_search.py` — 24 tests: API key handling, error messages, agent config mandate validation, simulated search flow, real LLM integration tests
+- `tests/test_defender.py` — 1 test strengthened: `test_ensure_agents_new_file_copied` now checks completeness
+
+### Key architectural decisions
+
+1. **Additive, not destructive** — Hermes skills stay. `ensure_skills()` unchanged. New agent configs added alongside. Two code paths in `cli.py` (3-line if/else dispatch).
+2. **Agent configs co-located with workers** — Same `src/hydra_swarm/agents/` directory. Auto-discovered by `ensure_agents()` via YAML frontmatter validation.
+3. **`hydra-` prefix on orchestration agents** — Avoids collision with stale V0.2 agents (`architect.md`, `librarian.md`) already in `.opencode/agents/`.
+4. **`hydra-proceed` → `hydra-conductor` name difference** — Acknowledges the different runtime identity. The Hermes skill name stays `hydra-proceed`.
+5. **brave_search.py as mandatory-first, MCP as last resort** — LLMs default to MCP tools unless explicitly instructed otherwise. Prescriptive language required.
+
+### Files changed
+
+```
+Created:  src/hydra_swarm/agents/hydra-architect.md      (+260 lines)
+Created:  src/hydra_swarm/agents/hydra-conductor.md      (+304 lines)
+Created:  src/hydra_swarm/agents/hydra-librarian.md      (+273 lines)
+Modified: src/hydra_swarm/cli.py                         (+57 lines, 7 changes)
+Modified: pyproject.toml                                 (1.0.0 → 1.1.0)
+Modified: src/hydra_swarm/agents/adversary.md            (stale Hermes reference fixed)
+Created:  tests/test_no_hermes_routing.py                (28 tests)
+Created:  tests/test_brave_search.py                     (24 tests)
+Modified: tests/test_defender.py                         (1 assertion strengthened)
+
+Total: 5 created, 4 modified, 0 deleted
+Tests: 102/102 passing (49 prior + 53 new)
+Git hash: f2b064463f6ebf465a479a86e88bf7e742592227
+```
+
+### Next steps
+
+- Manual end-to-end test: `hydra --no-hermes run "Add a /health endpoint"` on a real project
+- Observe OpenCode orchestration agents in action — compare behavior vs Hermes path
+- Consider MCP configuration for OpenCode orchestration agents (Brave Search MCP server as fallback)
+- Address brave_search.py source vs deployed mismatch
+
 

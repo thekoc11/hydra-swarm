@@ -3,10 +3,21 @@
 ## Interface Contract
 - **Inputs:** Full lifecycle file (all sections: Goal, Architect, Blueprint, Builder, Adversary, Greenlit, Defender), existing wiki pages (`wiki/*.md`, `wiki/components/*.md`)
 - **Outputs:** Updated wiki pages, `[HYDRA KNOWLEDGE: SECURED]` completion tag, git commit (if user approves)
-- **Dependencies:** Hermes Agent (`hydra-librarian` skill), git (for commit)
+- **Dependencies:** Hermes Agent (`hydra-librarian` skill) **OR** OpenCode CLI (`hydra-librarian` agent config, `--no-hermes` path). git (for commit)
 
 ## Current Status
-IMPLEMENTED (V1.0 Hermes Pivot)
+IMPLEMENTED (V1.1 dual-runtime)
+
+## Dual-Runtime Model (V1.1)
+
+The Librarian is available in two runtimes:
+
+| Runtime | Trigger | Mechanism |
+|---------|---------|-----------|
+| **Hermes skill** (default) | `hydra retain` | `hermes chat -s hydra-librarian`. Conversational Hermes session. |
+| **OpenCode agent** (opt-in) | `hydra --no-hermes retain` | `opencode --agent hydra-librarian`. The agent config IS the system prompt. |
+
+Both paths preserve: knowledge extraction, cross-reference protocol, conversational refinement, commit barrier. The OpenCode agent config includes a `## GOVERNING PHILOSOPHY` section (Three Pillars + Universal Invariant) and a `## VERIFICATION TOOL` section mandating `brave_search.py` as the primary search instrument.
 
 ## Core Shift: OpenCode Agent → Hermes Conversational Skill
 
@@ -149,10 +160,11 @@ This is the lint cycle from `llm__wiki.md` applied to Hydra's own wiki.
 
 ## Implementation Notes
 
-- Implemented as `skills/hydra-librarian/SKILL.md` (~180 lines) with YAML frontmatter
-- Launched via `hermes chat -s hydra-librarian` from `cli.py` (`hydra retain`)
+- **Hermes path:** Implemented as `skills/hydra-librarian/SKILL.md` (~180 lines) with YAML frontmatter
+- **OpenCode path:** Implemented as `src/hydra_swarm/agents/hydra-librarian.md` (~270 lines). Core instructions preserved, tool references adapted. Includes `## GOVERNING PHILOSOPHY` section (the Librarian IS the Keystone — embodies Pillar 1) and `## VERIFICATION TOOL` section with `brave_search.py` primary mandate.
+- Launched via `hermes chat -s hydra-librarian` (default) or `opencode --agent hydra-librarian` (`--no-hermes`)
 - Reads lifecycle via `current_lifecycle.txt` pointer
 - Discovers wiki pages via `glob wiki/*.md` + `glob wiki/components/*.md`
 - Follows `llm__wiki.md` formatting guidelines for all wiki writes
 - Completion tag: `[HYDRA KNOWLEDGE: SECURED]`
-- Commit: Hermes asks "Commit? (yes/no)". On yes: `git add -A && git commit -m "Hydra: <goal>"`
+- Commit: asks "Commit? (yes/no)". On yes: `git add -A && git commit -m "Hydra: <goal>"`

@@ -126,13 +126,32 @@ The commit barrier is preserved but conversational: the librarian asks "Commit?
 ## CLI Commands
 
 ```
-hydra --help                  → Show help, exit 0. No filesystem changes.
-hydra run "<goal>"            → New session (architect → proceed → librarian)
-hydra proceed                 → Continue to next phase (reads lifecycle)
-hydra retain                  → Run librarian only (knowledge compounding)
-hydra resume <lifecycle.md>   → Resume existing lifecycle (detects phase)
-hydra --agent <name> "<goal>" → Direct agent launch (legacy support)
+hydra --help                              → Show help, exit 0. No filesystem changes.
+hydra run "<goal>"                        → New session (architect → proceed → librarian)
+hydra --no-hermes run "<goal>"            → Same, but orchestration agents run as OpenCode configs
+hydra proceed                             → Continue to next phase (reads lifecycle)
+hydra --no-hermes proceed                 → Same, but conductor runs as OpenCode agent
+hydra retain                              → Run librarian only (knowledge compounding)
+hydra --no-hermes retain                  → Same, but librarian runs as OpenCode agent
+hydra resume <lifecycle.md>               → Resume existing lifecycle (detects phase)
+hydra --no-hermes resume <lifecycle.md>   → Same, but with OpenCode orchestration agents
+hydra --agent <name> "<goal>"             → Direct agent launch (legacy support)
 ```
+
+### `--no-hermes` Flag (V1.1)
+
+The `--no-hermes` flag is an additive, opt-in switch that replaces Hermes skill launches with OpenCode agent configs. It uses the main argparse parser (before subcommand): `hydra --no-hermes run "goal"`. The flag is accepted by all subcommands.
+
+**Skill → Agent mapping:**
+
+| CLI command | Hermes (default) | OpenCode (--no-hermes) |
+|---|---|---|
+| `hydra run "goal"` | `hermes chat -s hydra-architect` | `opencode --agent hydra-architect` |
+| `hydra proceed` | `hermes chat -s hydra-proceed` | `opencode --agent hydra-conductor` |
+| `hydra retain` | `hermes chat -s hydra-librarian` | `opencode --agent hydra-librarian` |
+| `hydra resume <file>` | `hermes chat -s <skill>` | `opencode --agent <agent>` |
+
+The mapping is a hardcoded `SKILL_TO_AGENT` dict in `cli.py`. Only one entry where names differ: `"hydra-proceed"` → `"hydra-conductor"`. Unknown skills from `_detect_phase()` now hard-exit with an error (was a dangerous `.get(skill, skill)` fallback that could pass Hermes skill names to OpenCode).
 
 ---
 
@@ -170,6 +189,20 @@ hydra --agent <name> "<goal>" → Direct agent launch (legacy support)
   `brave_search.py` (paid Brave API: freshness, goggles, llm/news endpoints).
   Hermes cross-checks with `web_search()` (independent Firecrawl/Tool Gateway
   index). Cross-index agreement = high confidence.
+- **[2026-05-31] `--no-hermes` dual-runtime flag.** Additive, opt-in. Hermes
+  remains default. Users can A/B test both runtimes. Three new OpenCode agent
+  configs (`hydra-architect.md`, `hydra-conductor.md`, `hydra-librarian.md`)
+  added to `src/hydra_swarm/agents/` — auto-discovered by `ensure_agents()`.
+  Two code paths in cli.py (Hermes vs OpenCode launch) — dispatch is 3 lines
+  of if/else. Flag on main parser (before subcommand): `hydra --no-hermes run`.
+- **[2026-05-31] Exit code propagation.** `_launch_opencode()` and
+  `_launch_hermes()` now capture `CompletedProcess.returncode` and exit on
+  non-zero. Prevents silent continuation after agent crashes.
+- **[2026-05-31] Configurable session timeout.** `HYDRA_SESSION_TIMEOUT`
+  env var replaces hardcoded `timeout=3600`. Both launch functions use it.
+- **[2026-05-31] `SKILL_TO_AGENT` fallback hardened.** Unknown skills from
+  `_detect_phase()` now hard-exit with an error message instead of silently
+  passing unresolvable agent names. Prevents launching non-existent agents.
 
 ---
 
@@ -231,6 +264,12 @@ hydra run "Add a /health endpoint"
 
 - Skills shipped with package: `src/hydra_swarm/skills/` → copied to target `skills/`
 - Agent configs shipped with package: `src/hydra_swarm/agents/` → copied to target `.opencode/agents/`
+- **V1.1:** `ensure_agents()` now copies 7 agent configs (4 workers + 3 orchestration agents for `--no-hermes`). Uses `rglob("*.md")` for subdirectory discovery.
+- `_launch_opencode(agent)` mirrors `_launch_hermes(skill)` — uses `opencode --agent <agent>` (TUI form, interactive, blocking). Both capture exit codes and propagate failures.
+- `SKILL_TO_AGENT` dict maps Hermes skill names to OpenCode agent names. Hardcoded in `cli.py`. Only `hydra-proceed` → `hydra-conductor` differs.
+- `_detect_phase()` returns Hermes skill names — caller maps to agents when `--no-hermes` is set.
+- `HYDRA_SESSION_TIMEOUT` env var (default: 3600) controls timeout for both launch functions.
+- Stale-agent warnings now prefixed with `[HYDRA]` for scannability in stderr output.
 - Lifecycle is markdown (not JSON) — human-readable system of record
 - `current_lifecycle.txt` is the indirection pointer — agents follow it, don't search
 - Completion tags preserved for human readability and lightweight `cli.py` resume detection

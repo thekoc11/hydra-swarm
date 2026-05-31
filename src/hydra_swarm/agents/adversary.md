@@ -21,7 +21,7 @@ active lifecycle file. Read that lifecycle file. Find the `## Goal`, the
 
 When done: report flaws in this session. End with `[ADVERSARY: N FLAWS FOUND]`
 on its own line. Do NOT write any files. Do NOT append to the lifecycle file.
-Hermes will capture your terminal output and write the lifecycle.
+The Hydra pipeline conductor will capture your output for the lifecycle.
 
 Format each finding as:
 [FLAW] CRITICAL <description>

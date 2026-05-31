@@ -3,18 +3,27 @@
 ## Interface Contract
 - **Inputs:** User goal (string), target project filesystem (pyproject.toml, source tree, existing lifecycle if resuming)
 - **Outputs:** `## Architect` section in lifecycle (contract + directives), `[HYDRA: CONVERGED]` completion tag
-- **Dependencies:** Hermes Agent (`hydra-architect` skill), Brave Search API key (optional, for paid features)
+- **Dependencies:** Hermes Agent (`hydra-architect` skill) **OR** OpenCode CLI (`hydra-architect` agent config, `--no-hermes` path). Brave Search API key (optional, for paid features)
 
 ## Current Status
-IMPLEMENTED
+IMPLEMENTED (V1.1 dual-runtime)
 
 ## Architecture
 
-The Architect is a **Hermes conversational skill** (`skills/hydra-architect/SKILL.md`), not an OpenCode agent. It runs in Hermes Session 1 with full conversational capability — interrogating the user, exploring the codebase, verifying assumptions against external sources, and producing a comprehensive contract.
+The Architect is available in two runtimes:
 
-### Why Hermes, not OpenCode
+| Runtime | Trigger | Mechanism |
+|---------|---------|-----------|
+| **Hermes skill** (default) | `hydra run "goal"` | `hermes chat -s hydra-architect`. Conversational Hermes session. Skill appended to Hermes base prompt. |
+| **OpenCode agent** (opt-in) | `hydra --no-hermes run "goal"` | `opencode --agent hydra-architect`. The agent config IS the system prompt — no base behavior to compete with. |
+
+### Why Hermes, not OpenCode (Default Path Rationale)
 
 The Architect is a conversational, interrogative role. It verifies assumptions, asks clarifying questions, explores the codebase, assesses complexity, and negotiates pipeline scope with the user. Hermes is natively conversational — this is its natural mode. Assigning architect to an OpenCode agent would waste its coding capabilities on a pure reasoning task.
+
+### Why OpenCode, not Hermes (`--no-hermes` Path Rationale)
+
+OpenCode agent configs ARE the system prompt — no base behavior to compete with. Hermes skills are advisory text appended to a permissive base prompt; the agent's native tools compete with skill-mandated workflows. The `--no-hermes` flag lets users A/B test which runtime model produces better results for their workflow. Both paths are maintained — the flag is additive, not a replacement.
 
 ---
 
@@ -144,9 +153,11 @@ Contains: goal, contract, expected builder output format, pre-verified research 
 
 ## Implementation Notes
 
-- Implemented as `skills/hydra-architect/SKILL.md` (~220 lines) with YAML frontmatter
-- Launched via `hermes chat -s hydra-architect` from `cli.py`
+- **Hermes path:** Implemented as `skills/hydra-architect/SKILL.md` (~220 lines) with YAML frontmatter
+- **OpenCode path:** Implemented as `src/hydra_swarm/agents/hydra-architect.md` (~260 lines). Core instructions preserved, tool references adapted (`terminal()` → bash, `read_file()` → native file reads, `skill_view()` removed — agent config IS the system prompt). Includes `## GOVERNING PHILOSOPHY` section (Three Pillars + Universal Invariant) and `## VERIFICATION TOOL` section with mandatory-first `brave_search.py` mandate.
+- Launched via `hermes chat -s hydra-architect` (default) or `opencode --agent hydra-architect` (`--no-hermes`)
 - Supporting script: `skills/hydra-architect/scripts/brave_search.py` (~270 lines, pure stdlib)
 - Reference guide: `skills/hydra-architect/references/brave-search-guide.md` (~220 lines, 9-section strategic guide for LLMs on search query construction)
 - Contract is written directly to lifecycle markdown under `## Architect` section
 - Converged signal: `[HYDRA: CONVERGED]`
+- **brave_search.py mandate language:** Agent config uses prescriptive language ("MANDATORY: Your FIRST action... must be to run brave_search.py via bash") — not descriptive ("PRIMARY search instrument"). Without this, LLMs default to `brave-web-search` MCP and ignore the strategic tool. Fallback chain: brave_search.py → webfetch → MCP (last resort).

@@ -1,12 +1,21 @@
 #!/usr/bin/env python3
-"""Hydra Swarm — CLI entry point. Hermes Conductor Architecture (V1.0)."""
+"""Hydra Swarm — CLI entry point. Hermes Conductor Architecture (V1.1)."""
 
 import argparse
 import shutil
 import subprocess
 import sys
+import os
 from datetime import datetime, timezone
 from pathlib import Path
+
+# ── Configuration ─────────────────────────────────────────────────────────────
+
+# Default session timeout in seconds (1 hour). Override with
+# HYDRA_SESSION_TIMEOUT environment variable.
+_DEFAULT_SESSION_TIMEOUT = int(
+    os.environ.get("HYDRA_SESSION_TIMEOUT", "3600")
+)
 
 
 def _pkg_dir() -> Path:
@@ -33,7 +42,7 @@ def ensure_agents(target: Path) -> None:
     agents_dst = target / ".opencode" / "agents"
     agents_dst.mkdir(parents=True, exist_ok=True)
 
-    for src in agents_src.glob("*.md"):
+    for src in agents_src.rglob("*.md"):
         # Only copy files that are valid OpenCode agent configs.
         # An agent config must have YAML frontmatter with a 'permission:' key.
         content = src.read_text()
@@ -54,11 +63,12 @@ def ensure_agents(target: Path) -> None:
             dst_content = dst.read_text()
             if content != dst_content:
                 print(
-                    f"Warning: {dst} differs from the Hydra package version.\n"
-                    f"  Your local copy may contain customisations, or the "
-                    f"package has updates.\n"
+                    f"[HYDRA] Agent config update available: {dst}\n"
+                    f"  The Hydra package ships an updated version of this agent.\n"
                     f"  To accept the package version, delete the local file "
-                    f"and re-run `hydra run`.",
+                    f"and re-run `hydra run`.\n"
+                    f"  Running with an outdated agent config may cause "
+                    f"unexpected behavior.",
                     file=sys.stderr,
                 )
 
@@ -142,10 +152,61 @@ def _launch_hermes(skill: str) -> None:
         )
         sys.exit(1)
     try:
-        subprocess.run([hermes, "chat", "-s", skill], timeout=3600)
+        result = subprocess.run(
+            [hermes, "chat", "-s", skill],
+            timeout=_DEFAULT_SESSION_TIMEOUT,
+        )
     except subprocess.TimeoutExpired:
-        print("\nError: Hermes session timed out after 3600 seconds.", file=sys.stderr)
+        print(
+            f"\nError: Hermes session timed out after "
+            f"{_DEFAULT_SESSION_TIMEOUT} seconds.",
+            file=sys.stderr,
+        )
         sys.exit(1)
+    if result.returncode != 0:
+        print(
+            f"\nError: Hermes session exited with code {result.returncode}.",
+            file=sys.stderr,
+        )
+        sys.exit(result.returncode)
+
+
+SKILL_TO_AGENT = {
+    "hydra-architect": "hydra-architect",
+    "hydra-proceed": "hydra-conductor",
+    "hydra-librarian": "hydra-librarian",
+}
+
+
+def _launch_opencode(agent: str) -> None:
+    """Launch an OpenCode TUI session with the given agent."""
+    opener = shutil.which("opencode")
+    if not opener:
+        print(
+            "Error: OpenCode CLI is not installed.\n"
+            "Install: https://opencode.ai\n"
+            "Or visit: https://github.com/opencode-ai/opencode",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    try:
+        result = subprocess.run(
+            [opener, "--agent", agent],
+            timeout=_DEFAULT_SESSION_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        print(
+            f"\nError: OpenCode session timed out after "
+            f"{_DEFAULT_SESSION_TIMEOUT} seconds.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if result.returncode != 0:
+        print(
+            f"\nError: OpenCode session exited with code {result.returncode}.",
+            file=sys.stderr,
+        )
+        sys.exit(result.returncode)
 
 
 def _detect_phase(lifecycle_text: str) -> str:
@@ -208,10 +269,14 @@ def main(argv: list[str] | None = None) -> None:
 
     # ── Standard subcommand mode ─────────────────────────────────────────
     parser = argparse.ArgumentParser(
-        description="Hydra Swarm — autonomous AI software factory (V1.0 Hermes Conductor)"
+        description="Hydra Swarm — autonomous AI software factory (V1.1 Hermes Conductor)"
     )
     parser.add_argument(
         "-V", "--version", action="store_true", help="Show version and exit"
+    )
+    parser.add_argument(
+        "--no-hermes", action="store_true",
+        help="Use OpenCode agents instead of Hermes skills for orchestration"
     )
     subparsers = parser.add_subparsers(dest="command")
 
@@ -250,7 +315,10 @@ def main(argv: list[str] | None = None) -> None:
         lifecycle_path = _write_lifecycle_stub(args.goal, experiments_dir)
         pointer = experiments_dir / "current_lifecycle.txt"
         pointer.write_text(str(lifecycle_path.resolve()) + "\n")
-        _launch_hermes("hydra-architect")
+        if args.no_hermes:
+            _launch_opencode("hydra-architect")
+        else:
+            _launch_hermes("hydra-architect")
 
     # ── hydra proceed ─────────────────────────────────────────────────────
     elif args.command == "proceed":
@@ -261,7 +329,10 @@ def main(argv: list[str] | None = None) -> None:
             print("Error: No active lifecycle found. Run 'hydra run <goal>' first.",
                   file=sys.stderr)
             sys.exit(1)
-        _launch_hermes("hydra-proceed")
+        if args.no_hermes:
+            _launch_opencode("hydra-conductor")
+        else:
+            _launch_hermes("hydra-proceed")
 
     # ── hydra retain ──────────────────────────────────────────────────────
     elif args.command == "retain":
@@ -272,7 +343,10 @@ def main(argv: list[str] | None = None) -> None:
             print("Error: No active lifecycle found. Run 'hydra run <goal>' first.",
                   file=sys.stderr)
             sys.exit(1)
-        _launch_hermes("hydra-librarian")
+        if args.no_hermes:
+            _launch_opencode("hydra-librarian")
+        else:
+            _launch_hermes("hydra-librarian")
 
     # ── hydra resume <lifecycle> ──────────────────────────────────────────
     elif args.command == "resume":
@@ -294,9 +368,22 @@ def main(argv: list[str] | None = None) -> None:
         pointer.write_text(str(lifecycle.resolve()) + "\n")
         # Detect phase and launch appropriate skill
         skill = _detect_phase(text)
-        print(f"Resuming lifecycle: {lifecycle.name}")
-        print(f"Detected phase → launching Hermes with skill: {skill}")
-        _launch_hermes(skill)
+        if skill not in SKILL_TO_AGENT:
+            print(
+                f"Error: _detect_phase returned unknown skill '{skill}' — "
+                f"no OpenCode agent mapping exists.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        agent = SKILL_TO_AGENT[skill]
+        if args.no_hermes:
+            print(f"Resuming lifecycle: {lifecycle.name}")
+            print(f"Detected phase → launching OpenCode with agent: {agent}")
+            _launch_opencode(agent)
+        else:
+            print(f"Resuming lifecycle: {lifecycle.name}")
+            print(f"Detected phase → launching Hermes with skill: {skill}")
+            _launch_hermes(skill)
 
     # ── No command given ──────────────────────────────────────────────────
     else:

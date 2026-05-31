@@ -18,15 +18,15 @@ V1.0 replaces this with a **Hermes conductor** (`hydra-proceed` skill). Hermes l
 
 ## Execution Model
 
-### Three Hermes Sessions (Context Isolation)
+### Three Sessions (Context Isolation) — Dual-Runtime
 
-Three separate sessions with fresh contexts prevent role pollution:
+Three separate sessions with fresh contexts prevent role pollution. In the default Hermes path, these are Hermes skill sessions. In the `--no-hermes` path (V1.1), these are OpenCode agent sessions launched via `opencode --agent <name>`.
 
-| Session | Skill | Role | Launched by |
-|---------|-------|------|-------------|
-| 1 | `hydra-architect` | Socratic verification, contract + directive authoring | `hydra run` |
-| 2 | `hydra-proceed` | Pipeline execution — launches agents in tmux, captures output, greenlights, runs defender | `hydra proceed` |
-| 3 | `hydra-librarian` | Knowledge compounding — cross-references, contradiction flagging, wiki updates | `hydra retain` |
+| Session | Hermes Skill (default) | OpenCode Agent (`--no-hermes`) | Role | Launched by |
+|---------|------------------------|-------------------------------|------|-------------|
+| 1 | `hydra-architect` | `hydra-architect` | Socratic verification, contract + directive authoring | `hydra run` |
+| 2 | `hydra-proceed` | `hydra-conductor` | Pipeline execution — launches agents in tmux, captures output, greenlights, runs defender | `hydra proceed` |
+| 3 | `hydra-librarian` | `hydra-librarian` | Knowledge compounding — cross-references, contradiction flagging, wiki updates | `hydra retain` |
 
 **Why three sessions:** Architecture instructions ("verify everything, do not write code") compete with librarian instructions ("write documentation, compound knowledge") in a single context. Three fresh contexts solve this. Transition cost is negligible — `cli.py` prints the next command.
 
@@ -46,19 +46,22 @@ Three separate sessions with fresh contexts prevent role pollution:
 
 Hermes Issue #413 proves that `delegate_task` spawns clones of the Hermes runtime with the same LLM. An adversarial pipeline requires the adversary to be a structurally different mind — different system prompt (finds flaws, doesn't build), different model (can use different provider), and rigid permission boundary (`edit: deny` enforced by OpenCode, not by prompt suggestion).
 
-| Agent | Runtime | Session | Permission | Why this runtime |
-|-------|---------|---------|-----------|------------------|
-| Architect | **Hermes** skill | Session 1 | Full conversational | Interrogative, conversational role. Hermes is natively conversational. |
-| Blueprint | **OpenCode** | tmux #1 | `edit:allow, bash:deny, websearch:allow` | Interactive planning. User refines, solidifies approach. |
-| Builder | **OpenCode** (Task subagent) | tmux #1 | `edit:allow, bash:allow, websearch:allow` | Autonomous implementation. Spawned by blueprint as Task subagent. |
-| Adversary | **OpenCode** | tmux #2 | `edit:deny, bash:deny, websearch:allow` | Must be a different mind (Issue #413). Reports in terminal only. |
-| Defender | **OpenCode** (large) or **Hermes** (small) | tmux #3 or Session 2 | `edit:allow, bash:allow, websearch:allow` | Adaptive: small scopes handled by Hermes directly. |
-| Librarian | **Hermes** skill | Session 3 | Full conversational | Knowledge compounding, cross-referencing, conversational refinement. |
+| Agent | Runtime (default) | Runtime (`--no-hermes`) | Session | Permission | Why this runtime |
+|-------|--------------------|------------------------|---------|-----------|------------------|
+| Architect | **Hermes** skill | **OpenCode** agent | Session 1 / tmux | Full conversational / `edit:allow, bash:allow` | Interrogative, conversational role. Hermes is natively conversational. OpenCode agent config IS the system prompt — no base behavior to compete with. |
+| Blueprint | **OpenCode** | OpenCode | tmux #1 | `edit:allow, bash:deny, websearch:allow` | Interactive planning. User refines, solidifies approach. |
+| Builder | **OpenCode** (Task subagent) | OpenCode (Task subagent) | tmux #1 | `edit:allow, bash:allow, websearch:allow` | Autonomous implementation. Spawned by blueprint as Task subagent. |
+| Adversary | **OpenCode** | OpenCode | tmux #2 | `edit:deny, bash:deny, websearch:allow` | Must be a different mind (Issue #413). Reports in terminal only. |
+| Defender | **OpenCode** (large) or **Hermes** (small) | OpenCode (large) or OpenCode (small) | tmux #3 or Session 2 | `edit:allow, bash:allow, websearch:allow` | Adaptive: small scopes handled in-conductor directly. |
+| Librarian | **Hermes** skill | **OpenCode** agent | Session 3 / tmux | Full conversational / `edit:allow, bash:allow` | Knowledge compounding, cross-referencing, conversational refinement. |
+
+**V1.1:** Architect, Conductor (proceed), and Librarian are dual-runtime. Default path uses Hermes skills; `--no-hermes` path uses OpenCode agent configs. The Conductor is named `hydra-conductor` in OpenCode (vs. `hydra-proceed` in Hermes) — names differ to reflect the different runtime identity.
 
 ---
 
 ## Handoff Protocol — User-Driven, Not Polling-Driven
 
+### Hermes Path (default)
 ```
 1. Hermes writes phase directive to lifecycle (injection mechanism + permanent record)
 2. terminal("tmux new-session -d -s hydra_<id> opencode --agent <name>")
@@ -68,6 +71,16 @@ Hermes Issue #413 proves that `delegate_task` spawns clones of the Hermes runtim
 6. Hermes: terminal("tmux kill-session -t hydra_<id>")
 7. Hermes reads lifecycle, verifies completion (LLM comprehension, not regex)
 8. Hermes proceeds to next phase or exits with next command
+```
+
+### OpenCode Path (`--no-hermes`)
+```
+1. cli.py's _launch_opencode(agent) runs: subprocess.run(["opencode", "--agent", agent], timeout=HYDRA_SESSION_TIMEOUT)
+2. Interactive TUI opens. User works with the orchestration agent directly.
+3. Agent writes to lifecycle and appends completion tags.
+4. User exits the TUI when done.
+5. cli.py checks exit code — non-zero → exits with error (no silent continuation).
+6. User proceeds to next command.
 ```
 
 **Why user-driven:** No polling loop consuming CPU. No false positives from partial tag writes. The user can intervene at any point. The user decides when a phase is truly complete, not when a tag appears. If the tmux session crashes, the user notices and tells Hermes.
@@ -132,13 +145,17 @@ Preserved for human readability and lightweight `cli.py` resume detection:
 | 2026-05-30 | **Adversary stays truly read-only** | `edit: deny`. Reports in terminal. Hermes captures output. Auditor writes reports, not ledger entries. |
 | 2026-05-30 | **Builder diff as handoff artifact** | Adversary has `bash:deny`. The diff in lifecycle is the only way it discovers what changed. |
 | 2026-05-30 | **Adaptive defender threshold** | Balances UX (fewer sessions) against context (Hermes handles small scopes, delegates large ones). |
+| 2026-05-31 | **`--no-hermes` dual-runtime** | Orchestration agents (architect, conductor, librarian) now have both Hermes skill and OpenCode agent paths. Additive — Hermes remains default. |
+| 2026-05-31 | **Conductor renamed for OpenCode** | `hydra-proceed` (Hermes skill) → `hydra-conductor` (OpenCode agent). Names differ to reflect the different runtime identity. |
 
 ## Implementation Notes
 
 - OpenCode agents defined in `.opencode/agents/*.md` with YAML frontmatter permission profiles
+- **V1.1:** 7 agent configs total — 4 workers (blueprint, builder, adversary, defender) + 3 orchestration (hydra-architect, hydra-conductor, hydra-librarian). Orchestration agents auto-discovered by `ensure_agents()` via `rglob("*.md")`.
 - Builder spawned as Task subagent from blueprint: `task(subagent_type="builder", prompt="...")` — resolves to `.opencode/agents/builder.md`
 - Subagent permissions are per-agent, not inherited from parent (confirmed by OpenCode changelog v1.14.46)
 - Lifecycle is markdown (not JSON) — human-readable system of record
 - `current_lifecycle.txt` is the indirection pointer — agents follow it, don't search
 - Hermes `terminal()` tool used for all tmux commands — `-d` flag ensures non-blocking
 - Adversary output capture: primary = OpenCode DB query, fallback = `tmux capture-pane`
+- **V1.1 `--no-hermes` path:** Uses `opencode --agent <name>` (interactive TUI) instead of `hermes chat -s <skill>`. `_launch_opencode()` mirrors `_launch_hermes()`: checks binary exists, propagates exit codes, uses `HYDRA_SESSION_TIMEOUT` env var for timeout.
