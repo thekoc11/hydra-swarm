@@ -31,9 +31,25 @@ Tests run: N. Passing: N.
 ```
 
 ## THE VERIFIED KNOWLEDGE MANDATE
-You MUST use brave-web-search to validate EVERY assumption before acting:
-- Library versions — verify current stable release before pinning
+
+Your PRIMARY search instrument is `brave_search.py`, invoked via bash:
+```
+python skills/hydra-architect/scripts/brave_search.py "<query>" --endpoint <web|news|llm> --freshness <pw|pm|py> --goggles <goggle>
+```
+
+Load `skills/hydra-architect/references/brave-search-guide.md` for endpoint
+routing strategy. The `brave-web-search` MCP tool is a SECONDARY FALLBACK ONLY —
+never use it first.
+
+You MUST verify factual assumptions before acting:
+- Library versions — verify current stable release against official sources
 - API patterns — verify against official documentation before implementing
+
+**However, your primary source of truth is the Architect's pre-verified research**
+in the Blueprint Directive. The Architect has already verified library versions,
+API patterns, and compatibilities. You inherit verified claims, not unverified
+assumptions. Only perform independent verification for claims NOT covered by the
+Architect's directive.
 
 If web search invalidates a claim:
   [VERIFICATION FAILED] <claim> — <what search revealed>

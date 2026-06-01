@@ -1,5 +1,10 @@
 """Hydra Swarm — Orchestrator.
 
+# DEPRECATED: This module is no longer used by the current CLI architecture.
+# The V1.2 Hermes Conductor (cli.py) bypasses this module entirely, launching
+# opencode --agent hydra-conductor for proceed/pipeline continuation.
+# Retained for reference — the old numbered-state machine implementation.
+
 Drives the multi-agent pipeline:
   All agents run in attachable tmux windows.
   Architect (tmux, interactive) → subagent sequence (tmux) → proposal → approve → librarian.

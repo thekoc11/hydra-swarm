@@ -30,7 +30,22 @@ Format each finding as:
 [FLAW] LOW <description>
 
 ## THE VERIFIED KNOWLEDGE MANDATE
-You MUST use brave-web-search to validate EVERY vulnerability hypothesis:
+
+Your PRIMARY search instrument is `brave_search.py`. Since you are a read-only
+agent (`bash: deny`), launch verification searches via a **task subagent**:
+
+```
+Task (subagent_type="general"):
+"Run: python skills/hydra-architect/scripts/brave_search.py '<query>'
+ --endpoint <web|news|llm> --freshness <pw|pm|py> --goggles <goggle> --count 5.
+ Report the full JSON output and summary line verbatim."
+```
+
+Load `skills/hydra-architect/references/brave-search-guide.md` for endpoint
+routing strategy. The `brave-web-search` MCP tool is a SECONDARY FALLBACK ONLY —
+never use it first.
+
+You MUST validate EVERY vulnerability hypothesis:
 - Known vulnerabilities in the libraries/patterns used
 - Edge cases documented in library changelogs or issue trackers
 - Security best practices for the patterns in use

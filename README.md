@@ -1,73 +1,160 @@
-# Hydra Swarm Framework 2.0
+# Hydra Swarm
 
-Hydra is an autonomous AI software factory designed to implement features, fix bugs, and write documentation via parallel, adversarial LLM agent swarms.
-
-This repository serves as the new, independent home for the Hydra Framework. It contains the system prompts, legacy orchestration scripts, and the architectural context needed to rebuild Hydra into a truly generalizable, Skill-based AI orchestration framework.
-
----
-
-## 1. The Core Philosophy
-
-Hydra is built on two unyielding principles:
-
-### A. The "LLM Knowledge Base" Philosophy
-*Code is ephemeral exhaust. Intent is permanent.*
-LLMs do not have intuition. If an autonomous agent encounters code that bypasses a standard convention to handle a systemic load or constraint, the agent will assume the code is "bad" and attempt to "fix" it, introducing catastrophic regressions. 
-Therefore, before any code is written, the exact architectural **"Why"** must be explicitly hammered out into a plain-English `Master_Plan.md`. Code is merely a byproduct of this Knowledge Base.
-
-### B. The Omnidirectional Implementation Framework
-Code must earn its right to exist by surviving aggressive, adversarial self-testing. The Headless Agents operate on a rigid **5-State Machine**:
-1. **Blueprint:** Extensive Socratic planning and codebase exploration.
-2. **Builder:** Implement the "happy path."
-3. **Adversary:** Drop all write tools. Attack the newly written code. Find flaws, edge cases, state contamination risks, and missing boundaries.
-4. **Defender:** Re-engage write tools. Write micro-tests explicitly to break the code, then refactor and shield the code until it survives the assault.
-5. **Self-Evaluator:** Objectively run the tests. If they fail, violently loop back to State 2.
+Autonomous AI software factory — spawn LLM agent swarms that implement features,
+fix bugs, and write tests in your repositories.
 
 ---
 
-## 2. The 5-Phase Pipeline
-The overarching architecture of the Hydra Swarm lifecycle:
+## Prerequisites
 
-1. **Phase 0: The Crucible (Architect)**
-   An uncompromising Socratic agent (`architect.md`) ruthlessly interrogates the naive user about edge cases and system limits until they are forced to type `CONVERGE`. The Architect then generates the `Master_Plan.md` and the `swarm_contract.json` (defining how many parallel agents to spawn and what strategies they should take).
-2. **Phase 1: Swarm Execution (Headless Agents)**
-   Parallel agents (`headless_agent.md`) wake up in completely isolated `git worktrees`. They execute the 5-State Machine independently.
-3. **Phase 2: The Tribunal (Bailiff & Judge)**
-   - **The Bailiff (`evaluator_agent.md`):** Extracts diffs and enforces strict framework rules (e.g., "Did the agent write adversarial tests in the `tests/` directory?"). If all agents fail, it triggers a backtrack to the Architect.
-   - **The Blind Judge (`llm_judge.md`):** A tool-less LLM that evaluates the surviving diffs strictly against Correctness, Robustness, and Elegance, returning exactly one winner via JSON.
-4. **Phase 3: Validation (Integrator)**
-   Once the winning code is merged, the Integrator (`integrator_agent.md`) wakes up to materialize the "Top-Level Sanity Mandates" from the Master Plan into macro-level End-to-End integration tests.
-5. **Phase 4: Retention (Librarian)**
-   The Librarian (`librarian_agent.md`) extracts the core architectural lessons and "Why" behind the decisions and permanently embeds them into the repository's documentation. It then deletes the ephemeral `Master_Plan.md` to prevent clutter.
+Hydra needs a few tools on your system. Install what's missing:
 
----
+| Dependency | Check | Install |
+|-----------|--------|---------|
+| **tmux** | `which tmux` | `apt install tmux` or `brew install tmux` |
+| **git** | `which git` | `apt install git` or `brew install git` |
+| **OpenCode** | `which opencode` | `curl -fsSL https://opencode.ai/install \| bash`<br>`npm install -g opencode-ai`<br>`brew install anomalyco/tap/opencode` |
+| **Brave Search API key** | `.env` file | Sign up at [api.search.brave.com](https://api.search.brave.com) |
 
-## 3. The Sandbox Dilemma (Why the Bash MVP Failed)
+OpenCode will prompt for an LLM provider API key on first launch. Configure your
+model at `~/.config/opencode/config.toml` or via environment variables.
 
-The initial version of Hydra used a massive, procedural Bash orchestrator (`bin/hydra-legacy.sh`) to manage worktrees and run tests. This proved hopelessly brittle when applied to complex production systems (like a Vue/FastAPI hedge fund trading app). 
+## Quick Start
 
-**The Failures:**
-* **Missing Environments:** Isolated `git worktrees` ran on the host machine and lacked local `.venv` dependencies or `node_modules`, causing tests to crash.
-* **The Live Data Dilemma:** Agents testing high-frequency market data logic could not simply use the production API keys. Multiple parallel agents spawning live WebSockets instantly hit broker limits and disconnected the live production dashboard. They also triggered REST API IP bans via aggressive historical data polling.
-* **Full-Stack Isolation:** An agent building a Vue frontend feature couldn't test against the production backend, because the production backend didn't have the new API endpoint the agent had just written in its isolated worktree. 
+```bash
+# 1. Install Hydra directly from GitHub
+pip install git+https://github.com/thekoc11/hydra-swarm.git
 
-**The Lesson:** A static Bash orchestrator cannot possibly hardcode the sandbox requirements for every conceivable tech stack (CUDA C++, JUCE Audio Plugins, PyTorch GPU training, Full-Stack Web).
+# 2. Create your environment file
+#    Get your API key at https://api.search.brave.com
+curl -O https://raw.githubusercontent.com/thekoc11/hydra-swarm/main/.env.example
+mv .env.example .env
+#    Edit .env — add your Brave Search API key
 
----
+# 3. Run the pre-flight check
+hydra check
+# All checks passed. Hydra is ready.
 
-## 4. The Exploration Directive (The Future of Hydra)
+# 4. Start a session
+hydra run "Add a /health endpoint to the API"
+```
 
-**MANDATE:** *The previous orchestrator (`bin/hydra-legacy.sh`) is a brittle MVP. Do not use it. Your first task in this repository is to explore and rewrite the Orchestrator using a simpler, elegant, Object-Oriented architecture (following Occam's Razor).*
+## How It Works
 
-Crucially, the framework must explore how it might rely on **Model Context Protocol (MCP)** and **OpenClaw Skills** to handle the Sandbox Dilemma dynamically.
+Hydra follows a three-stage pipeline on every run:
 
-Instead of hardcoding environment setups (Docker, PyTorch, C++ compilation), **Hydra should dynamically ingest custom Skills provided by the target repository.** 
+```
+hydra run "your goal"
+  └─ Architect    → Socratic planning, design decisions, verified research
+  └─ Blueprint    → Implementation roadmap with exact constraints
+     └─ Builder   → Implements the happy path per the blueprint
+       └─ User evaluates   → You are the final adversary
+  └─ Librarian    → Compounds learnings into permanent documentation
+```
 
-For example, a user's repository might provide a `SKILL.md` that grants an agent the ability to:
-* Provision an ephemeral Docker sandbox connected to a live-data Redis multiplexer.
-* Run headless Playwright E2E tests against a temporary frontend proxy.
-* Build a CUDA kernel with specific nvcc flags.
+**Every execution always does two things:**
+1. **Ingest** — Web-search for version verification, API validation, library viability.
+2. **Retain** — The Librarian extracts knowledge and compounds it into project
+   permanent docs.
 
-Hydra's true power will come from being a pure, unopinionated Swarm Manager that injects context-specific tools into its agents on the fly. 
+The pipeline between Ingest and Retain is mode-dependent. Code is optional
+exhaust — sometimes there is none, and that's valid.
 
-**Welcome to Hydra Swarm 2.0. Explore, ideate, and build.**
+Run `hydra proceed` to advance through pipeline phases. Run `hydra retain` to
+run the Librarian explicitly. Run `hydra resume <lifecycle.md>` to pick up an
+existing session.
+
+## Dual Runtime
+
+Hydra supports two orchestration engines. **OpenCode is the default.**
+
+| | OpenCode (default) | Hermes (opt-in) |
+|---|---|---|
+| Status | Mandatory — must be installed | Optional enhancement |
+| Invocation | `hydra run "goal"` | `hydra run --use-hermes "goal"` |
+| Agent system | OpenCode subagents (`.opencode/agents/`) | Hermes skills (`~/.hermes/skills/`) |
+| Fallback | None (required) | Falls back to OpenCode if not installed |
+
+If Hermes is not installed and `--use-hermes` is passed, Hydra falls back to
+OpenCode with a warning.
+
+## Commands
+
+```bash
+hydra check              # Verify all dependencies (run once)
+hydra run "goal"         # Start a new session (defaults to OpenCode)
+hydra run --use-hermes "goal"  # Start with Hermes skills
+hydra proceed            # Advance to the next pipeline phase
+hydra retain             # Run the Librarian explicitly
+hydra resume <file.md>   # Resume an existing lifecycle
+hydra --version          # Show installed version
+```
+
+Direct agent invocation (legacy mode):
+
+```bash
+hydra --agent hydra-architect "your goal"
+```
+
+## Configuration
+
+### Environment
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `BRAVE_SEARCH_API_KEY` | Brave web search (required) | — |
+| `BRAVE_AUTOSUGGEST_API_KEY` | Brave autosuggest (optional) | — |
+| `HYDRA_SESSION_TIMEOUT` | Agent session timeout in seconds | `3600` |
+| `HYDRA_SESSION_SLUG` | Set automatically per run | derived from goal |
+
+Copy `.env.example` to `.env` and fill in your keys.
+
+### Agent Configs
+
+Agent configurations live in `.opencode/agents/`. Hydra copies them from the
+package on each run. If you customize an agent config, Hydra warns you when the
+package ships an update — delete the local file to accept the new version.
+
+### Skills (Hermes)
+
+Skills live in `skills/` and `~/.hermes/skills/`. Hydra copies them on each
+run. Same update-warning behavior as agent configs.
+
+## Project Structure
+
+```
+.
+├── src/hydra_swarm/       # Python orchestrator
+│   ├── cli.py             # CLI entry point
+│   ├── agents/            # OpenCode agent configs (.md)
+│   └── skills/            # Hermes skill directories
+├── .opencode/agents/      # Runtime agent configs (deployed)
+├── wiki/                  # LLM-maintained knowledge base
+├── .hydra_experiments/    # Session lifecycle files
+├── .env.example           # Environment template
+└── pyproject.toml         # Build configuration
+```
+
+## Philosophy
+
+**Intent is permanent. Code is exhaust.**
+
+Before any code is written, the architectural "Why" is hammered into the
+knowledge base (`wiki/`). Code is a byproduct. If an agent encounters code
+without documented intent, it files a wiki entry before touching anything.
+
+**No decision without verification.**
+
+No assumption survives unchecked. Every library version, API claim, and
+architectural pattern is validated against external reality before entering
+the knowledge base.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+## Links
+
+- [Brave Search API](https://api.search.brave.com) — Get your API keys
+- [OpenCode](https://opencode.ai) — The default orchestration runtime
+- [Wiki](wiki/) — Architecture decisions, component designs, log

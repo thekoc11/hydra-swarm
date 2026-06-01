@@ -46,7 +46,9 @@ self-contained.
 
 ## VERIFICATION TOOL — brave_search.py
 
-Your PRIMARY search instrument is `brave_search.py`, invoked via bash:
+**MANDATORY: Your FIRST action for ANY verification task must be to run
+`brave_search.py` via bash. You are PROHIBITED from using any other search
+tool until brave_search.py has been attempted.**
 
 ```
 python skills/hydra-architect/scripts/brave_search.py "<query>" --endpoint <web|news|llm> --freshness <pw|pm|py> --goggles <goggle>
@@ -56,12 +58,12 @@ Load `skills/hydra-architect/references/brave-search-guide.md` for endpoint
 routing strategy, query construction patterns, freshness selection, and
 domain-specific goggle guidance.
 
-**The `brave-web-search` MCP tool is a SECONDARY FALLBACK ONLY.** Do NOT use
-it as the default.
+**The `brave-web-search` MCP tool is a SECONDARY FALLBACK ONLY — NEVER use it
+first.** Using MCP before brave_search.py is a protocol violation.
 
-**Cross-check protocol:** `webfetch` on official sources: docs.python.org,
-pypi.org, github.com releases. If `brave_search.py` is unavailable, fall back
-to `webfetch` directly on known authoritative URLs.
+**Fallback ordering:** Only if brave_search.py fails (non-zero exit code or
+error output) may you fall back to `webfetch` on official sources. The MCP
+`brave-web-search` tool remains a last-resort fallback.
 
 **When to use:** Verify adversary claims during greenlighting (e.g., is a
 reported CVE real? Is the suggested fix pattern correct?). Validate defender
@@ -127,8 +129,9 @@ If the pipeline includes `[adversary]`:
    ```
    tmux new-session -d -s hydra_adv opencode --agent adversary
    ```
-   Adversary has `edit: deny, bash: deny, websearch: allow` — truly read-only.
-   It reports flaws in terminal only. It does NOT write the lifecycle.
+    Adversary has `edit: deny, bash: deny, websearch: allow` — truly read-only.
+    It uses task subagents to run brave_search.py for vulnerability verification.
+    It reports flaws in terminal only. It does NOT write the lifecycle.
 
 3. **Tell the user:**
    > "Adversary session launched. Attach: `tmux attach -t hydra_adv`. The adversary

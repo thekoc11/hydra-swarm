@@ -34,7 +34,7 @@ LLMs do not have intuition. If an autonomous agent encounters code that bypasses
 
 If an agent encounters code without documented intent, it files a wiki entry before touching anything.
 
-**Enforced by:** The Librarian, which extracts architectural lessons and compounds them into permanent docs after every execution. The Librarian itself is dual-runtime (V1.1): Hermes skill by default, OpenCode agent via `--no-hermes`.
+**Enforced by:** The Librarian, which extracts architectural lessons and compounds them into permanent docs after every execution. The Librarian itself is dual-runtime (V1.2): OpenCode agent by default, Hermes skill via `--use-hermes`.
 
 ## Pillar 2: No Decision Without Verification
 

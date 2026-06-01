@@ -727,4 +727,74 @@ Git hash: f2b064463f6ebf465a479a86e88bf7e742592227
 - Consider MCP configuration for OpenCode orchestration agents (Brave Search MCP server as fallback)
 - Address brave_search.py source vs deployed mismatch
 
+---
+
+## [2026-06-01] implement | V1.2 Public Share — flag inversion, hydra check, sentinel gate, README rewrite
+
+**Participants:** User + Architect → Blueprint → Builder → Adversary → Defender → Librarian
+**Duration:** Full pipeline execution
+
+### What was built
+
+- **Flag inversion: `--no-hermes` → `--use-hermes`.** OpenCode is now the mandatory default runtime. Hermes is opt-in via `--use-hermes`. If Hermes absent with `--use-hermes`, falls back to OpenCode with stderr warning (no hard-exit). `hydra check` validates opencode is installed. Hermes users now type `--use-hermes` — power users, acceptable friction.
+
+- **`hydra check` subcommand.** Playwright-style explicit setup step. Checks all 5 hard dependencies in one pass: tmux, git, opencode, .env, BRAVE_SEARCH_API_KEY. User gets one clear report. On success writes `.hydra_experiments/.preflight_passed` sentinel.
+
+- **Pre-flight sentinel gate.** All `hydra run`/`proceed`/`retain`/`resume` gated by `.preflight_passed`. Missing → "Run `hydra check` first." Version mismatch → soft warning (does not block — system deps don't change on version bumps). Sentinel hardened against TOCTOU via open fd + fstat.
+
+- **Goal slug derivation.** `_derive_goal_slug()` extracts 1-2 significant words from the goal. Tmux sessions now named `hydra_run_public_share` instead of bare `hydra_run` — prevents "duplicate session" collisions across concurrent runs.
+
+- **README rewritten.** Replaced V0 design description with V1.2 Hermes Conductor architecture. Quick Start uses `pip install git+https://...` instead of `git clone` + `pip install -e .` — no local clone required. Install commands: curl, npm, brew.
+
+- **`.env.example` created** (4 lines). Bare template with BRAVE_SEARCH_API_KEY and BRAVE_AUTOSUGGEST_API_KEY plus comments.
+
+- **LICENSE (MIT) created** (21 lines).
+
+- **Version bump: 1.1.1 → 1.2.0** in pyproject.toml.
+
+### 17 flaws found and hardened (Defender phase)
+
+| Severity | Count | Examples |
+|----------|-------|----------|
+| CRITICAL | 3 | Broken `test_no_hermes_routing.py` (16 tests referencing non-existent flag), TOCTOU race in sentinel gate, stderr not flushed before Hermes fallback crash |
+| HIGH | 3 | Lifecycle stub injection via `[HYDRA: CONVERGED]`, `_detect_phase` returning wrong agent for empty lifecycles, `_derive_goal_slug` producing stopword-only slugs |
+| MEDIUM | 5 | .env not checked for file type, `export` prefix not parsed, `HYDRA_SESSION_TIMEOUT` import crash on non-numeric, concurrent `hydra check` race, premature convergence signal |
+| LOW | 6 | `orchestrator.py` dead code (marked DEPRECATED), `--use-hermes` silently ignored with `hydra check`, invisible upgrade warning, `rglob` overreach in `ensure_agents`, `"fix it"` slug edge case, closure redefined in loop |
+
+All 17 hardened. 77 new tests created (37 routing + 40 preflight). Total: **126 tests passing** (up from 102).
+
+### Security hardening patterns
+
+- **TOCTOU**: `_check_preflight_gate` opens sentinel file, fstats fd, validates on open handle — no path re-resolution after check.
+- **Stderr flush**: `_launch_hermes` fallback path flushes stderr before calling `_launch_opencode` so warning is visible before potential crash.
+- **Lifecycle sanitization**: Code-fence injection, YAML frontmatter, `\r\n` normalization, `[HYDRA: CONVERGED]` bracket replacement.
+- **Import hardening**: `HYDRA_SESSION_TIMEOUT` wrapped in try/except ValueError with fallback to 3600 (previously crashed every `hydra` invocation before argparse parsed).
+- **Convention fixes**: `ensure_agents` reverted from `rglob("*.md")` to `glob("*.md")` (prevents .md files from `.git`/`__pycache__`). `_maybe_copy` closure moved outside `for` loop in `ensure_skills`.
+
+### Files changed
+
+```
+Modified: src/hydra_swarm/cli.py          (+349/-131 lines)
+Modified: README.md                        (rewritten)
+Modified: pyproject.toml                   (1.1.1 → 1.2.0)
+Created:  .env.example                     (4 lines)
+Created:  LICENSE                          (21 lines, MIT)
+Created:  tests/test_preflight.py          (40 tests)
+Created:  tests/test_use_hermes_routing.py (37 tests)
+Deleted:  tests/test_no_hermes_routing.py  (16 broken tests)
+
+Tests: 126/126 passing (49 defender + 37 routing + 40 preflight)
+```
+
+### Wiki updates (Librarian)
+
+43 stale `--no-hermes` references across 7 wiki pages updated to `--use-hermes` with inverted default/opt-in semantics. New sections added to `wiki/architecture.md`: Pre-Flight Check System, Goal Slug Derivation. New design decisions: flag inversion, `hydra check`, sentinel gate, orchestrator.py deprecated, `rglob`→`glob` reversion, session timeout import hardening. Component statuses bumped from V1.1 to V1.2.
+
+### Next steps
+
+- Publish to PyPI for `pip install hydra-swarm` (zero-friction install)
+- Manual end-to-end test: `hydra run "goal"` on a real project with OpenCode default
+- Observe `--use-hermes` fallback behavior
+- Address brave_search.py source vs deployed mismatch
+
 

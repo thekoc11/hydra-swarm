@@ -97,48 +97,50 @@ Hermes is the conductor of an orchestra. It doesn't play the violin — it guide
 
 ## Agent Topology
 
-### Dual-Runtime Model (V1.1)
+### Dual-Runtime Model (V1.2)
 
-V1.1 introduces a `--no-hermes` CLI flag that provides an opt-in parallel runtime path. Both paths coexist — Hermes is the default, OpenCode is opt-in.
+V1.2 inverts the V1.1 model. OpenCode is the mandatory default runtime — it's the better experience (user's assessment, 2026-06-01). Hermes is an optional enhancement activated via `--use-hermes`. If Hermes is not installed when `--use-hermes` is passed, Hydra falls back to OpenCode with a warning.
 
-| Orchestration Role | Default (Hermes skill) | `--no-hermes` (OpenCode agent) |
+| Orchestration Role | Default (OpenCode agent) | `--use-hermes` (Hermes skill) |
 |---|---|---|
-| Architect | `hermes chat -s hydra-architect` | `opencode --agent hydra-architect` |
-| Conductor | `hermes chat -s hydra-proceed` | `opencode --agent hydra-conductor` |
-| Librarian | `hermes chat -s hydra-librarian` | `opencode --agent hydra-librarian` |
+| Architect | `opencode --agent hydra-architect` | `hermes chat -s hydra-architect` |
+| Conductor | `opencode --agent hydra-conductor` | `hermes chat -s hydra-proceed` |
+| Librarian | `opencode --agent hydra-librarian` | `hermes chat -s hydra-librarian` |
 
-The flag is **additive, not destructive.** Hermes skills stay. `ensure_skills()` stays. The three new OpenCode agent configs (`src/hydra_swarm/agents/hydra-architect.md`, `hydra-conductor.md`, `hydra-librarian.md`) are added alongside existing files. The flag controls which runtime `cli.py` launches. This keeps V1.0 fully functional as the default while V1.1 is opt-in.
+The design is **additive, not destructive.** Hermes skills stay in the package. `ensure_skills()` stays. Both runtimes coexist. The flag controls which runtime `cli.py` launches. Hermes users pass `--use-hermes` — power users, acceptable friction.
 
 The OpenCode agent config IS the system prompt — no base behavior to compete with, unlike Hermes where skills are advisory text appended to a permissive base prompt.
 
-### Default Mode — Hermes Path (non-swarm)
+### Default Mode — OpenCode Path (non-swarm)
 
 ```
-Hermes (hydra-architect skill):
-  ├─ Verify goal. Adaptive Socratic interrogation.
-  ├─ Two-backend verification (brave_search.py + web_search)
-  ├─ Two-stage convergence (breadth → depth)
-  ├─ Writes ## Architect: contract + directives
-  └─ [HYDRA: CONVERGED]
+hydra run "goal"
+  → .hydra_experiments/.preflight_passed must exist (run hydra check first)
+  → OpenCode (hydra-architect agent):
+    ├─ Verify goal. Adaptive Socratic interrogation.
+    ├─ Two-backend verification (brave_search.py + webfetch)
+    ├─ Two-stage convergence (breadth → depth)
+    ├─ Writes ## Architect: contract + directives
+    └─ [HYDRA: CONVERGED]
 
 User runs: hydra proceed
         │
-Hermes (hydra-proceed skill):
+OpenCode (hydra-conductor agent):
   ├─ Reads lifecycle → pipeline phases
   ├─ Writes ## Blueprint Directive → launches blueprint in tmux
   │     └─ Blueprint spawns builder as Task subagent
   │         Builder implements, writes diff to lifecycle
-  ├─ User says "done" → Hermes verifies [BLUEPRINT: COMPLETE]
+  ├─ User says "done" → Conductor verifies [BLUEPRINT: COMPLETE]
   ├─ Writes ## Adversary Directive → launches adversary in tmux
   │     └─ Adversary reports flaws in terminal (NO file writes)
-  ├─ tmux capture-pane → Hermes extracts flaws → writes ## Adversary
+  ├─ tmux capture-pane → Conductor extracts flaws → writes ## Adversary
   ├─ Greenlight conversation: "Fix which flaws?"
-  ├─ Adaptive defender (Hermes for small scope, tmux for large)
+  ├─ Adaptive defender (Conductor for small scope, tmux for large)
   └─ Exits: "Run: hydra retain"
 
 User runs: hydra retain
         │
-Hermes (hydra-librarian skill):
+OpenCode (hydra-librarian agent):
   ├─ Reads full lifecycle → extracts discoveries, decisions, changes
   ├─ Cross-references with wiki/ → flags contradictions
   ├─ Conversational refinement with user
@@ -149,12 +151,12 @@ Hermes (hydra-librarian skill):
 
 | Agent | Runtime | Permissions |
 |-------|---------|-------------|
-| Architect | Hermes skill | Full (conversational) |
+| Architect | OpenCode (default) / Hermes skill (`--use-hermes`) | Full (conversational) |
 | @blueprint | OpenCode (tmux) | edit: allow, bash: deny, websearch: allow |
 | @builder | OpenCode (Task subagent) | edit: allow, bash: allow, websearch: allow |
 | @adversary | OpenCode (tmux) | edit: deny, bash: deny, websearch: allow |
 | @defender | OpenCode (tmux, large scope) | edit: allow, bash: allow, websearch: allow |
-| Librarian | Hermes skill | Full (conversational) |
+| Librarian | OpenCode (default) / Hermes skill (`--use-hermes`) | Full (conversational) |
 | User | Human | The final adversary. Evaluates all output. Triggers CONVERGE. |
 
 ### Swarm Mode (--swarm, deferred)
@@ -257,10 +259,47 @@ Discovery is **project-only.** Hydra's own wiki improves only during deliberate 
 
 ---
 
-## Runtime Artifacts
+## Pre-Flight Check System (V1.2)
+
+`hydra check` is an explicit, intentional setup step — modeled after the Playwright pattern (`pip install playwright` then `playwright install`). It verifies all hard dependencies in one pass so users get a single clear report, not cryptic failures mid-pipeline.
+
+### The 5 Checks
+
+| Check | Detection | Failure guidance |
+|-------|-----------|-----------------|
+| tmux | `shutil.which("tmux")` | apt install tmux / brew install tmux |
+| git | `shutil.which("git")` | apt install git / brew install git |
+| opencode | `shutil.which("opencode")` | 3 install methods (curl, npm, brew) + model config link |
+| .env | `Path(".env").is_file()` | Copy .env.example to .env; get key at api.search.brave.com |
+| BRAVE_SEARCH_API_KEY | `os.environ` or manual .env parse | Key missing or .env is not a regular file |
+
+### Sentinel Gate
+
+On success, `hydra check` writes `.hydra_experiments/.preflight_passed`:
+
+```
+version: 1.2.0
+checked_at: <iso8601>
+checks_passed: tmux, git, opencode, env_file, brave_api_key
+```
+
+All subsequent commands (`run`, `proceed`, `retain`, `resume`) check for this sentinel before proceeding. If missing: "Run `hydra check` first." If the version has changed (Hydra upgraded): print a soft warning — do NOT block. The user decides whether to re-check. System deps (tmux, git, opencode, .env, Brave key) don't change on version bumps.
+
+### Sentinel Hardening
+
+The sentinel gate uses `open()` + `fstat()` to validate on an open file handle — no path re-resolution after the check. This prevents TOCTOU (time-of-check-time-of-use) races. Non-regular-file sentinels (directories, symlinks) are rejected.
+
+## Goal Slug Derivation (V1.2)
+
+Every `hydra run` extracts a 1–2 word slug from the goal for tmux session names (e.g., `hydra_run_public_share` instead of bare `hydra_run`). This prevents "duplicate session" collisions when multiple Hydra sessions run concurrently.
+
+Algorithm: strip common prefixes ("make", "add", "fix", "implement", "create", "build"), filter stopwords, take first 2 significant words (>2 chars), lowercase, join with underscore, truncate to 30 chars. If all words are stopwords, falls back to `"session"`. The slug is stored in the `HYDRA_SESSION_SLUG` env var and written to the lifecycle stub.
+
+---
 
 ```
 .hydra_experiments/
+├── .preflight_passed          # Sentinel: version + check results. Gates run/proceed/retain/resume.
 ├── current_lifecycle.txt     # Pointer to active lifecycle
 ├── hydra_lifecycle_*.md      # System of record — all phases append here
 └── ...
@@ -271,9 +310,9 @@ skills/                        # Copied by ensure_skills() from package
 └── hydra-librarian/SKILL.md
 
 .opencode/agents/              # Copied by ensure_agents() from package
-├── hydra-architect.md         # Orchestration agent (V1.1, --no-hermes)
-├── hydra-conductor.md         # Orchestration agent (V1.1, --no-hermes)
-├── hydra-librarian.md         # Orchestration agent (V1.1, --no-hermes)
+├── hydra-architect.md         # Orchestration agent (V1.2, default runtime)
+├── hydra-conductor.md         # Orchestration agent (V1.2, default runtime)
+├── hydra-librarian.md         # Orchestration agent (V1.2, default runtime)
 ├── blueprint.md               # Worker agent
 ├── builder.md                 # Worker agent
 ├── adversary.md               # Worker agent
@@ -306,7 +345,14 @@ skills/                        # Copied by ensure_skills() from package
 | **2026-05-30** | **Two-stage architect convergence** | Stage 1: breadth (full picture). Stage 2: depth (philosophy, intuition, reasoning). Downstream agents inherit rich context. |
 | **2026-05-30** | **Two-backend verification protocol** | Primary: brave_search.py (paid Brave API with freshness/goggles/news). Cross-check: Hermes web_search (Firecrawl index). Agreement = high confidence. |
 | **2026-05-31** | **`--no-hermes` dual-runtime flag** | Additive, opt-in. Hermes remains default. Users can A/B test both runtimes and migrate when ready. Three new OpenCode agent configs created alongside existing Hermes skills. Two code paths in cli.py (Hermes vs OpenCode launch) — accepted because dispatch is 3 lines of if/else. |
+| **2026-06-01** | **Flag inversion: `--no-hermes` → `--use-hermes`. OpenCode becomes default.** | opencode is the better experience (user's assessment). It's the mandatory runtime, checked by `hydra check`. Hermes is an optional enhancement. `--use-hermes` users are power users — acceptable friction. If Hermes absent with `--use-hermes`, fall back to OpenCode with warning (no hard-exit). |
+| **2026-06-01** | **`hydra check` pre-flight subcommand** | Playwright-style explicit setup step. Checks all 5 hard deps at once: tmux, git, opencode, .env, BRAVE_SEARCH_API_KEY. User gets one clear report. Writes `.preflight_passed` sentinel on success. |
+| **2026-06-01** | **Pre-flight sentinel gate** | `hydra run`/`proceed`/`retain`/`resume` gated by `.preflight_passed`. Missing → "Run `hydra check` first." Version mismatch → soft warning, not a block (system deps don't change on version bumps). Sentinel hardened against TOCTOU via open fd + fstat. |
+| **2026-06-01** | **Goal slug for tmux session names** | `_derive_goal_slug()` extracts 1–2 significant words. Prevents "duplicate session" collisions when multiple Hydra sessions run concurrently. Stored in `HYDRA_SESSION_SLUG` env var. |
+| **2026-06-01** | **`orchestrator.py` marked DEPRECATED** | The old Python state machine (443 lines) is dead code — never called from the new CLI architecture. Retained for reference with a docstring note. |
+| **2026-06-01** | **`rglob` → `glob` for agent discovery** | `ensure_agents()` reverted from `rglob("*.md")` to `glob("*.md")`. `rglob` traversed subdirectories, risking pickup of `.md` files from `.git` or `__pycache__`. |
+| **2026-06-01** | **`HYDRA_SESSION_TIMEOUT` import hardened** | Fallback via try/except ValueError: on non-numeric env var, defaults to 3600 with stderr warning. Previously crashed every `hydra` invocation — including `--help` and `--version` — before argparse even parsed. |
 | **2026-05-31** | **brave_search.py as mandatory first search tool** | Agent configs rewritten from descriptive ("PRIMARY search instrument") to prescriptive ("MANDATORY: Your FIRST action... must be brave_search.py via bash"). The `brave-web-search` MCP tool is formally deprecated as the default. Without this language, agents default to MCP and ignore the strategic search tool. Fallback chain: brave_search.py → webfetch → MCP (last resort). |
 | **2026-05-31** | **`HYDRA_SESSION_TIMEOUT` env var** | Both `_launch_opencode` and `_launch_hermes` now use `os.environ.get("HYDRA_SESSION_TIMEOUT", "3600")` instead of hardcoded magic number. Users can set for longer sessions. |
 | **2026-05-31** | **Exit code propagation from launch functions** | `_launch_opencode` and `_launch_hermes` now capture `CompletedProcess`, check `result.returncode`, and `sys.exit(result.returncode)` on non-zero. Prevents silent continuation after agent crashes. |
-| **2026-05-31** | **`rglob` for agent discovery** | `ensure_agents()` changed from `glob("*.md")` to `rglob("*.md")` — agent configs in subdirectories are now auto-discovered. |
+| **2026-05-31** | **`rglob` for agent discovery** | `ensure_agents()` changed from `glob("*.md")` to `rglob("*.md")` — agent configs in subdirectories are now auto-discovered. **Reverted 2026-06-01**: `rglob` traversed subdirectories, risking .md files from `.git`/`__pycache__`. Back to `glob("*.md")`. |

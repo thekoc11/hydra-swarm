@@ -29,7 +29,17 @@ Tests created: N. Passing: N.
 ```
 
 ## THE VERIFIED KNOWLEDGE MANDATE
-You MUST use brave-web-search to validate fixes:
+
+Your PRIMARY search instrument is `brave_search.py`, invoked via bash:
+```
+python skills/hydra-architect/scripts/brave_search.py "<query>" --endpoint <web|news|llm> --freshness <pw|pm|py> --goggles <goggle>
+```
+
+Load `skills/hydra-architect/references/brave-search-guide.md` for endpoint
+routing strategy. The `brave-web-search` MCP tool is a SECONDARY FALLBACK ONLY —
+never use it first.
+
+You MUST validate fixes:
 - Verify hardening patterns against official library documentation
 - Verify test patterns are correct for the project's test framework version
 
