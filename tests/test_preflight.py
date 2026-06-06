@@ -166,42 +166,6 @@ class TestParseEnvValueExport:
         assert _parse_env_value(env, "KEY") == "quoted value"
 
 
-# ─── Flaw #9: HYDRA_SESSION_TIMEOUT crash ────────────────────────────────────
-
-class TestSessionTimeoutCrash:
-    """Tests that non-numeric HYDRA_SESSION_TIMEOUT doesn't crash on import."""
-
-    def test_non_numeric_timeout_falls_back(self, monkeypatch):
-        """Setting HYDRA_SESSION_TIMEOUT=abc should fall back to 3600."""
-        import importlib
-        import hydra_swarm.cli as cli_mod
-
-        # Reload the module with the bad env var set
-        monkeypatch.setenv("HYDRA_SESSION_TIMEOUT", "abc")
-
-        # Import fresh — the try/except at module level catches the error
-        importlib.reload(cli_mod)
-        assert cli_mod._DEFAULT_SESSION_TIMEOUT == 3600
-
-    def test_valid_timeout_parsed(self, monkeypatch):
-        """Valid HYDRA_SESSION_TIMEOUT=7200 should be parsed."""
-        import importlib
-        import hydra_swarm.cli as cli_mod
-
-        monkeypatch.setenv("HYDRA_SESSION_TIMEOUT", "7200")
-        importlib.reload(cli_mod)
-        assert cli_mod._DEFAULT_SESSION_TIMEOUT == 7200
-
-    def test_empty_timeout_falls_back(self, monkeypatch):
-        """Empty HYDRA_SESSION_TIMEOUT should fall back."""
-        import importlib
-        import hydra_swarm.cli as cli_mod
-
-        monkeypatch.setenv("HYDRA_SESSION_TIMEOUT", "")
-        importlib.reload(cli_mod)
-        assert cli_mod._DEFAULT_SESSION_TIMEOUT == 3600
-
-
 # ─── Flaw #2 / #14: TOCTOU and upgrade warning ──────────────────────────────
 
 class TestPreflightGate:

@@ -104,7 +104,6 @@ hydra --agent hydra-architect "your goal"
 |----------|---------|---------|
 | `BRAVE_SEARCH_API_KEY` | Brave web search (required) | — |
 | `BRAVE_AUTOSUGGEST_API_KEY` | Brave autosuggest (optional) | — |
-| `HYDRA_SESSION_TIMEOUT` | Agent session timeout in seconds | `3600` |
 | `HYDRA_SESSION_SLUG` | Set automatically per run | derived from goal |
 
 Copy `.env.example` to `.env` and fill in your keys.

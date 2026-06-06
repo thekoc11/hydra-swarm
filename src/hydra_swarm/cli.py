@@ -11,22 +11,6 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-# ── Configuration ─────────────────────────────────────────────────────────────
-
-# Default session timeout in seconds (1 hour). Override with
-# HYDRA_SESSION_TIMEOUT environment variable.
-try:
-    _DEFAULT_SESSION_TIMEOUT = int(
-        os.environ.get("HYDRA_SESSION_TIMEOUT", "3600")
-    )
-except (ValueError, TypeError):
-    _DEFAULT_SESSION_TIMEOUT = 3600
-    print(
-        f"Warning: HYDRA_SESSION_TIMEOUT='{os.environ.get('HYDRA_SESSION_TIMEOUT')}' "
-        f"is not a valid integer. Falling back to {_DEFAULT_SESSION_TIMEOUT}s.",
-        file=sys.stderr,
-    )
-
 # ── Utility functions ─────────────────────────────────────────────────────────
 
 
@@ -429,18 +413,7 @@ def _launch_opencode(agent: str) -> None:
             file=sys.stderr,
         )
         sys.exit(1)
-    try:
-        result = subprocess.run(
-            [opener, "--agent", agent],
-            timeout=_DEFAULT_SESSION_TIMEOUT,
-        )
-    except subprocess.TimeoutExpired:
-        print(
-            f"\nError: OpenCode session timed out after "
-            f"{_DEFAULT_SESSION_TIMEOUT} seconds.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    result = subprocess.run([opener, "--agent", agent])
     if result.returncode != 0:
         print(
             f"\nError: OpenCode session exited with code {result.returncode}.",
@@ -464,18 +437,7 @@ def _launch_hermes(skill: str) -> None:
         agent = SKILL_TO_AGENT.get(skill, skill)
         _launch_opencode(agent)
         return
-    try:
-        result = subprocess.run(
-            [hermes, "chat", "-s", skill],
-            timeout=_DEFAULT_SESSION_TIMEOUT,
-        )
-    except subprocess.TimeoutExpired:
-        print(
-            f"\nError: Hermes session timed out after "
-            f"{_DEFAULT_SESSION_TIMEOUT} seconds.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    result = subprocess.run([hermes, "chat", "-s", skill])
     if result.returncode != 0:
         print(
             f"\nError: Hermes session exited with code {result.returncode}.",
@@ -516,6 +478,301 @@ def _detect_phase(lifecycle_text: str) -> str:
     if "[DEFENDER: COMPLETE]" in lifecycle_text:
         return "hydra-librarian"
     return "hydra-proceed"  # pipeline in progress
+
+
+# ── hydra continue support ──────────────────────────────────────────────────
+
+
+def _list_sessions_opencode(max_sessions: int = 20) -> list[dict]:
+    """Run `opencode session list` and parse tabular output.
+
+    Returns a list of dicts with keys: id, title, updated.
+    Caps results at *max_sessions*.  If the command fails or produces
+    unparseable output, prints the raw stdout and returns an empty list.
+    """
+    try:
+        result = subprocess.run(
+            ["opencode", "session", "list"],
+            capture_output=True, text=True,
+        )
+    except Exception:
+        return []
+
+    stdout = result.stdout.strip()
+    if not stdout:
+        return []
+
+    lines = stdout.splitlines()
+    sessions: list[dict] = []
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # Skip header and separator lines
+        if stripped.startswith("Session ID") or stripped.startswith("---"):
+            continue
+
+        tokens = stripped.split()
+        if len(tokens) < 3:
+            continue
+
+        # Session ID is first token (UUID-like)
+        sid = tokens[0]
+        # Updated is typically last two tokens: YYYY-MM-DD HH:MM
+        updated = " ".join(tokens[-2:])
+        # Title is everything between first and last two tokens
+        title = " ".join(tokens[1:-2]) if len(tokens) > 3 else ""
+
+        sessions.append({
+            "id": sid,
+            "title": title,
+            "updated": updated,
+        })
+
+    # Cap at max
+    sessions = sessions[:max_sessions]
+
+    # Fail-safe: if we couldn't parse anything but stdout has content,
+    # print the raw output so the user can still see their sessions
+    if not sessions and stdout:
+        print(stdout)
+
+    return sessions
+
+
+def _list_sessions_hermes(max_sessions: int = 20) -> list[dict]:
+    """Run `hermes sessions list` and parse tabular output.
+
+    Returns a list of dicts with keys: id, title, updated.
+    Caps results at *max_sessions*.  If the command fails or produces
+    unparseable output, prints the raw stdout and returns an empty list.
+
+    Parsing uses the separator line (dashes) to detect fixed column
+    boundaries, then slices each data line accordingly.
+    """
+    try:
+        result = subprocess.run(
+            ["hermes", "sessions", "list"],
+            capture_output=True, text=True,
+        )
+    except Exception:
+        return []
+
+    stdout = result.stdout.strip()
+    if not stdout:
+        return []
+
+    lines = stdout.splitlines()
+    if len(lines) < 3:
+        return []
+
+    sessions: list[dict] = []
+
+    # Find column boundaries from the separator line (line of dashes)
+    header = lines[0]
+    sep_line = lines[1] if len(lines) > 1 else ""
+
+    # Detect column boundaries: each contiguous run of dashes is a column
+    boundaries: list[int] = []
+    in_dash = False
+    for i, ch in enumerate(sep_line):
+        if ch == "-" and not in_dash:
+            boundaries.append(i)
+            in_dash = True
+        elif ch != "-" and in_dash:
+            boundaries.append(i)
+            in_dash = False
+    if in_dash:
+        boundaries.append(len(sep_line))
+
+    # Pair boundaries into (start, end) for each column
+    col_ranges: list[tuple[int, int]] = []
+    for j in range(0, len(boundaries), 2):
+        if j + 1 < len(boundaries):
+            col_ranges.append((boundaries[j], boundaries[j + 1]))
+
+    # Map column names to indices from the header
+    col_names = header.split()
+    if len(col_ranges) < 4 or len(col_names) < 4:
+        # Fallback: whitespace-split, ID = last, updated = last 2 before ID
+        for line in lines[2:]:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            tokens = stripped.split()
+            if len(tokens) < 4:
+                continue
+            sessions.append({
+                "id": tokens[-1],
+                "title": " ".join(tokens[:-3]),
+                "updated": " ".join(tokens[-3:-1]),
+            })
+    else:
+        # Determine which column index is Title, Last Active, ID
+        # Header words: ["Title", "Preview", "Last", "Active", "ID"]
+        # But "Last Active" is two words → we need the combined column
+        # Strategy: use header split() positions to match columns
+        header_lower = header.lower()
+        title_idx = None
+        last_active_idx = None
+        id_idx = None
+
+        # ID column is the last one (rightmost column range)
+        id_idx = len(col_ranges) - 1
+
+        # Last Active is the second-to-last column (before ID)
+        last_active_idx = len(col_ranges) - 2
+
+        # Title is the first column
+        title_idx = 0
+
+        if title_idx is not None and last_active_idx is not None and id_idx is not None:
+            for line in lines[2:]:
+                stripped = line.strip()
+                if not stripped:
+                    continue
+
+                def _safe_slice(idx: int) -> str:
+                    if idx < len(col_ranges):
+                        start, end = col_ranges[idx]
+                        return line[start:end].strip()
+                    return ""
+
+                sid = _safe_slice(id_idx)
+                if not sid:
+                    continue
+
+                sessions.append({
+                    "id": sid,
+                    "title": _safe_slice(title_idx),
+                    "updated": _safe_slice(last_active_idx),
+                })
+
+    sessions = sessions[:max_sessions]
+
+    # Fail-safe: print raw output if nothing parsed
+    if not sessions and stdout:
+        print(stdout)
+
+    return sessions
+
+
+def _paginate_display(sessions: list[dict], page_size: int = 5):
+    """Generator that yields pages of *page_size* sessions.
+
+    Yields successive slices of *sessions*.  Each yield is a list of
+    up to *page_size* dicts.  Stops when exhausted (no sentinel value).
+    """
+    offset = 0
+    while offset < len(sessions):
+        yield sessions[offset:offset + page_size]
+        offset += page_size
+
+
+def _interactive_select(sessions: list[dict], page_size: int = 5) -> dict | None:
+    """Interactive session selection with pagination.
+
+    Displays sessions *page_size* at a time.  Accepts:
+      Enter / n  → next page
+      q          → quit (returns None)
+      h          → help
+      <number>   → select session at that position (1-based)
+
+    Returns the selected session dict, or None if the user quits.
+    """
+    if not sessions:
+        print("No sessions found.")
+        return None
+
+    pages = _paginate_display(sessions, page_size)
+    page_num = 1
+    global_offset = 0  # tracks the index of the first item on the current page
+
+    while True:
+        try:
+            page = next(pages)
+        except StopIteration:
+            print("No more sessions.")
+            return None
+
+        # Inner loop: stay on same page until user advances or selects
+        while True:
+            print(f"\n── Page {page_num} ──")
+            for i, s in enumerate(page, start=1):
+                print(f"  {i}. [{s['id']}] {s['title']}  ({s['updated']})")
+
+            remaining = len(sessions) - global_offset - len(page)
+            prompt = (
+                f"\n[1-{len(page)}/Enter/q/h]"
+                + (f" ({remaining} more)" if remaining > 0 else "")
+                + " "
+            )
+
+            choice = input(prompt).strip().lower()
+
+            if choice in ("q", "quit"):
+                return None
+            elif choice in ("h", "help"):
+                print("\nKeys:")
+                print("  1-5  Select session by number")
+                print("  Enter / n  Next page")
+                print("  q    Quit without selecting")
+                print("  h    Show this help")
+                continue  # re-display same page
+            elif choice in ("", "n", "next"):
+                break  # advance to next page
+            else:
+                try:
+                    num = int(choice)
+                    if 1 <= num <= len(page):
+                        return sessions[global_offset + num - 1]
+                    else:
+                        print(f"  Invalid number: must be 1-{len(page)}.")
+                        continue  # re-display same page
+                except ValueError:
+                    print(f"  Unrecognized input: '{choice}'.  Type h for help.")
+                    continue  # re-display same page
+
+        # Advance to next page
+        page_num += 1
+        global_offset += len(page)
+
+
+def _handle_continue(args: argparse.Namespace) -> None:
+    """Handle the `hydra continue` subcommand.
+
+    Lists sessions from opencode (default) or hermes (--use-hermes),
+    presents an interactive selector, and launches the chosen session.
+
+    Deliberately does NOT run preflight checks, ensure_agents,
+    ensure_skills, or write to .hydra_experiments.
+    """
+    if args.use_hermes:
+        sessions = _list_sessions_hermes()
+        runtime = "Hermes"
+    else:
+        sessions = _list_sessions_opencode()
+        runtime = "OpenCode"
+
+    if not sessions:
+        print("No sessions found.")
+        return
+
+    print(f"Found {len(sessions)} {runtime} session(s).")
+
+    selected = _interactive_select(sessions)
+    if selected is None:
+        print("No session selected.")
+        return
+
+    if args.use_hermes:
+        subprocess.run(["hermes", "--continue", selected["id"], "chat"])
+    else:
+        cmd = ["opencode", "-s", selected["id"]]
+        if getattr(args, "fork", False):
+            cmd.append("--fork")
+        subprocess.run(cmd)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -574,6 +831,15 @@ def main(argv: list[str] | None = None) -> None:
 
     # hydra check
     subparsers.add_parser("check", help="Verify all dependencies are installed")
+
+    # hydra continue
+    continue_parser = subparsers.add_parser(
+        "continue", help="Browse and resume past sessions"
+    )
+    continue_parser.add_argument(
+        "--fork", action="store_true",
+        help="Fork the session instead of continuing in-place (OpenCode only)",
+    )
 
     args = parser.parse_args(argv)
 
@@ -685,6 +951,10 @@ def main(argv: list[str] | None = None) -> None:
             print(f"Resuming lifecycle: {lifecycle.name}")
             print(f"Detected phase → launching OpenCode with agent: {agent}")
             _launch_opencode(agent)
+
+    # ── hydra continue ────────────────────────────────────────────────────
+    elif args.command == "continue":
+        _handle_continue(args)
 
     # ── No command given ──────────────────────────────────────────────────
     else:

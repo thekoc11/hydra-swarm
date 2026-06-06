@@ -14,3 +14,8 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.package-data]
 "hydra_swarm" = ["prompts/*.md", "agents/*.md", "skills/*/SKILL.md", "skills/*/scripts/*", "skills/*/references/*"]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]

@@ -75,7 +75,7 @@ Hermes Issue #413 proves that `delegate_task` spawns clones of the Hermes runtim
 
 ### Hermes Path (`--use-hermes`)
 ```
-1. cli.py's _launch_hermes(skill) runs: subprocess.run(["hermes", "chat", "-s", skill], timeout=HYDRA_SESSION_TIMEOUT)
+1. cli.py's _launch_hermes(skill) runs: subprocess.run(["hermes", "chat", "-s", skill])
 2. Interactive Hermes session opens. User works with the orchestration skill directly.
 3. Hermes writes to lifecycle and appends completion tags.
 4. User exits the session when done.
@@ -159,4 +159,4 @@ Preserved for human readability and lightweight `cli.py` resume detection:
 - `current_lifecycle.txt` is the indirection pointer — agents follow it, don't search
 - Hermes `terminal()` tool used for all tmux commands — `-d` flag ensures non-blocking
 - Adversary output capture: primary = OpenCode DB query, fallback = `tmux capture-pane`
-- **V1.2 `--use-hermes` path:** Uses `hermes chat -s <skill>` (interactive session) instead of `opencode --agent <name>`. `_launch_hermes()` falls back to `_launch_opencode()` if hermes not found — no hard-exit. Both launch functions propagate exit codes and use `HYDRA_SESSION_TIMEOUT` env var for timeout.
+- **V1.2 `--use-hermes` path:** Uses `hermes chat -s <skill>` (interactive session) instead of `opencode --agent <name>`. `_launch_hermes()` falls back to `_launch_opencode()` if hermes not found — no hard-exit. Both launch functions propagate exit codes (session timeout removed in V1.2 — sessions run indefinitely, users monitor via tmux).

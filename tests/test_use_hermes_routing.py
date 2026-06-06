@@ -514,47 +514,11 @@ class TestLaunchOpencode:
 
         assert calls == [["/usr/bin/opencode", "--agent", "hydra-architect"]]
 
-    def test_passes_timeout_to_subprocess(self, monkeypatch):
-        """subprocess.run must receive a timeout keyword argument."""
-        from hydra_swarm import cli as cli_mod
-
-        kwargs_received = {}
-
-        def fake_run(cmd, **kwargs):
-            kwargs_received.update(kwargs)
-            return subprocess.CompletedProcess(args=cmd, returncode=0)
-
-        monkeypatch.setattr(cli_mod.subprocess, "run", fake_run)
-        monkeypatch.setattr(cli_mod.shutil, "which", lambda x: "/usr/bin/opencode")
-
-        cli_mod._launch_opencode("test-agent")
-
-        assert "timeout" in kwargs_received, (
-            f"Expected timeout kwarg, got {kwargs_received}"
-        )
-        assert kwargs_received["timeout"] > 0
-
     def test_exits_if_opencode_not_installed(self, monkeypatch):
         """sys.exit(1) if opencode binary not found on PATH."""
         from hydra_swarm import cli as cli_mod
 
         monkeypatch.setattr(cli_mod.shutil, "which", lambda x: None)
-
-        with pytest.raises(SystemExit) as exc_info:
-            cli_mod._launch_opencode("test-agent")
-
-        assert exc_info.value.code == 1
-
-    def test_exits_on_timeout(self, monkeypatch):
-        """TimeoutExpired → sys.exit(1) with error message."""
-        from hydra_swarm import cli as cli_mod
-
-        monkeypatch.setattr(cli_mod.shutil, "which", lambda x: "/usr/bin/opencode")
-
-        def fake_run(cmd, **kwargs):
-            raise subprocess.TimeoutExpired(cmd=cmd, timeout=3600)
-
-        monkeypatch.setattr(cli_mod.subprocess, "run", fake_run)
 
         with pytest.raises(SystemExit) as exc_info:
             cli_mod._launch_opencode("test-agent")

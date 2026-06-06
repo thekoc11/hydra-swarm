@@ -132,6 +132,9 @@ hydra run "<goal>"                        → New session (architect via OpenCod
 hydra run --use-hermes "<goal>"           → Same, but orchestration via Hermes skills
 hydra proceed                             → Continue to next phase (reads lifecycle)
 hydra proceed --use-hermes                → Same, but conductor runs as Hermes skill
+hydra continue                            → Browse and resume past sessions (opencode default)
+hydra continue --use-hermes               → Same, but lists hermes sessions
+hydra continue --fork                     → Fork the resumed session (opencode only, ignored for hermes)
 hydra retain                              → Run librarian only (knowledge compounding)
 hydra retain --use-hermes                 → Same, but librarian runs as Hermes skill
 hydra resume <lifecycle.md>               → Resume existing lifecycle (detects phase)
@@ -202,11 +205,11 @@ The mapping is a hardcoded `SKILL_TO_AGENT` dict in `cli.py`. Only one entry whe
 - **[2026-05-31] Exit code propagation.** `_launch_opencode()` and
   `_launch_hermes()` now capture `CompletedProcess.returncode` and exit on
   non-zero. Prevents silent continuation after agent crashes.
-- **[2026-05-31] Configurable session timeout.** `HYDRA_SESSION_TIMEOUT`
-  env var replaces hardcoded `timeout=3600`. Both launch functions use it.
 - **[2026-05-31] `SKILL_TO_AGENT` fallback hardened.** Unknown skills from
   `_detect_phase()` now hard-exit with an error message instead of silently
   passing unresolvable agent names. Prevents launching non-existent agents.
+- ~~[2026-05-31] Configurable session timeout.~~ → **REMOVED (2026-06-05)** | `HYDRA_SESSION_TIMEOUT` env var and `timeout=` kwarg from both launch functions were removed entirely. Sessions now run indefinitely — users monitor via tmux.
+- **[2026-06-05] `hydra continue` command.** | Paginated session browser (20 sessions, 5 per page). Interactive selection: Enter for more, q to quit, number to select. Launches via `opencode -s <id>` (default) or `hermes --continue <id> chat` (`--use-hermes`). Parses tabular output from both tools with fail-safe raw-output fallback. `--fork` flag for opencode (silently ignored for hermes). Deliberately bypasses preflight gate, agent/skill setup, and `.hydra_experiments` writes. |
 
 ---
 
@@ -269,13 +272,15 @@ hydra run "Add a /health endpoint"
 - Skills shipped with package: `src/hydra_swarm/skills/` → copied to target `skills/`
 - Agent configs shipped with package: `src/hydra_swarm/agents/` → copied to target `.opencode/agents/`
 - **V1.2:** `ensure_agents()` copies 7 agent configs (4 workers + 3 orchestration agents). Uses `glob("*.md")` (not `rglob` — prevents .md files from `.git`/`__pycache__` being picked up).
-- `_launch_opencode(agent)` mirrors `_launch_hermes(skill)` — uses `opencode --agent <agent>` (TUI form, interactive, blocking). Both capture exit codes and propagate failures.
+- `_launch_opencode(agent)` and `_launch_hermes(skill)` both use `subprocess.run()` without timeout — sessions run indefinitely. Users monitor via tmux; orphaned processes managed by tmux session cleanup.
 - `SKILL_TO_AGENT` dict maps Hermes skill names to OpenCode agent names. Hardcoded in `cli.py`. Only `hydra-proceed` → `hydra-conductor` differs.
 - `_detect_phase()` returns Hermes skill names — caller maps to agents when `--use-hermes` is NOT set (default OpenCode path).
-- `HYDRA_SESSION_TIMEOUT` env var (default: 3600) controls timeout for both launch functions.
+- **`hydra continue`**: Paginated session browser. No preflight gate, no `.hydra_experiments` writes. Parses `opencode session list` / `hermes sessions list` tabular output. `--fork` silently ignored for hermes (no equivalent flag). 26 tests in `tests/test_continue.py`.
 - Stale-agent warnings now prefixed with `[HYDRA]` for scannability in stderr output.
 - Lifecycle is markdown (not JSON) — human-readable system of record
 - `current_lifecycle.txt` is the indirection pointer — agents follow it, don't search
 - Completion tags preserved for human readability and lightweight `cli.py` resume detection
 - Hermes `terminal()` tool used for all tmux commands — `-d` flag ensures non-blocking
 - Skills have YAML frontmatter with `---` delimiters, `name` matching directory, `platforms: [macos, linux]`
+- **OpenCode v1.16.0+ credential store:** `~/.local/share/opencode/auth.json` (populated via `/connect` command). `_opencode_available()` guard checks this first — `~/.config/opencode/` is MCP config only, not provider credentials. Env var API keys are fallback.
+- **`@pytest.mark.slow`**: Live-LLM integration tests in `test_brave_search.py` marked `slow`. Timeouts reduced to 60-120s. Use `-m "not slow"` for fast development runs. Marker registered in `pyproject.toml`.

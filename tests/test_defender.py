@@ -485,38 +485,6 @@ class TestFlaw6EnsureSkillsWarning:
         assert "skills" in captured.err.lower()
 
 
-# ─── Flaw #7 [HIGH] No timeout on _launch_hermes ────────────────────────────
-
-class TestFlaw7LaunchHermesTimeout:
-    """_launch_hermes must use a timeout to prevent hanging."""
-
-    def test_timeout_present_in_subprocess_call(self):
-        """Verify _launch_hermes passes timeout to subprocess.run."""
-        import inspect
-        from hydra_swarm.cli import _launch_hermes
-
-        source = inspect.getsource(_launch_hermes)
-        assert "timeout=" in source
-
-    def test_timeout_expired_handled(self, capsys, monkeypatch):
-        """TimeoutExpired should produce a clear error message."""
-        from hydra_swarm import cli as cli_mod
-
-        # Mock shutil.which to return a fake hermes path
-        monkeypatch.setattr(cli_mod.shutil, "which", lambda x: "/usr/bin/hermes")
-
-        # Mock subprocess.run to raise TimeoutExpired
-        def fake_run(*args, **kwargs):
-            raise subprocess.TimeoutExpired(cmd="hermes", timeout=1)
-
-        monkeypatch.setattr(cli_mod.subprocess, "run", fake_run)
-
-        with pytest.raises(SystemExit) as exc_info:
-            cli_mod._launch_hermes("hydra-architect")
-
-        assert exc_info.value.code == 1
-
-
 # ─── Flaw #8 [HIGH] brave_search.py auto-loads .env at import time ──────────
 
 class TestFlaw8BraveNoAutoLoad:
