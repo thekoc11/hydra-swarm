@@ -914,4 +914,124 @@ checking that fails with Task subagent output. Standardized timeouts: 90s archit
 - Verify that `hydra run`, `proceed`, `retain`, `resume` still work with no timeout
 - Publish to PyPI
 
+---
 
+## [2026-06-21] implement | V1.3 Search Index — cache-aware verification, two-phase protocol, tmux slug disambiguation
+
+**Participants:** User + Architect → Blueprint → Builder → Librarian
+**Duration:** Full pipeline execution (pipeline `[impl]`)
+
+### What was built
+
+**The Search Index Protocol** — Upgraded the Architect's verification phase from inline-read interleaving to a structured two-phase PERSPECTIVE PLAN → GATHER → ANALYZE protocol with cache-aware search and per-run audit trail artifacts.
+
+### New Scripts (3 created)
+
+- **`skills/hydra-architect/scripts/hydra_search.py`** (~130 lines, pure stdlib) — Cache-aware search wrapper. Mirrors `brave_search.py` CLI. On cache HIT: returns cached result from `search_index_<ts>.md`. On cache MISS: delegates to `brave_search.py`, appends structured entry. `--no-cache` flag for Adversary independent verification. `--claim-id`/`--perspective-id` for ANALYZE-phase cross-referencing.
+- **`skills/hydra-architect/scripts/search_index_lookup.py`** (~80 lines) — Pure function: strict 4-tuple `(query, freshness, endpoint, goggle)` exact match against the per-run search index. State-machine parser. No fuzzy matching.
+- **`skills/hydra-architect/scripts/search_index_append.py`** (~100 lines) — Pure function: validates structured header (9 mandatory fields), appends entry with `[END S{n}]` footer, creates index file on first call with `# Search Index` header comment.
+
+### Agent Config Updates (7 files, mechanical edit)
+
+All agent configs in `src/hydra_swarm/agents/` updated: `brave_search.py` → `hydra_search.py` as the mandatory verification entrypoint. `brave_search.py` is now an **internal backend** called by `hydra_search.py` on cache MISS — not user-facing. Zero residual `brave_search.py` references in agent configs.
+
+- `src/hydra_swarm/agents/hydra-architect.md` — section title, command lines, domain routing, startup self-test
+- `src/hydra_swarm/agents/hydra-conductor.md` — section title, command lines, user-facing messages. Tmux session names now include lifecycle slug: `hydra_bp_<slug>`, `hydra_adv_<slug>`, `hydra_def_<slug>`
+- `src/hydra_swarm/agents/hydra-librarian.md` — section title, command lines, prose
+- `src/hydra_swarm/agents/blueprint.md` — one-line invocation change
+- `src/hydra_swarm/agents/builder.md` — one-line invocation change
+- `src/hydra_swarm/agents/adversary.md` — one-line change + `--no-cache` flag note for independent re-verification
+- `src/hydra_swarm/agents/defender.md` — one-line invocation change
+
+### Skill & Guide Updates (4 files)
+
+- **`skills/hydra-architect/SKILL.md`** (+211 lines) — Replaced `## VERIFICATION TOOL` with `hydra_search.py` mandate. Inserted `## THE TWO-PHASE SEARCH INDEX PROTOCOL` with Perspective Plan checkpoint, GATHER procedure, ANALYZE procedure, cache mandate, and depth-gate table. Modified `## ADAPTIVE SOCRATIC DEPTH` with index-requirements column.
+- **`src/hydra_swarm/skills/hydra-architect/SKILL.md`** — Same edits (canonical source kept in sync with runtime mirror).
+- **`skills/hydra-architect/references/brave-search-guide.md`** (+145 lines) — Appended §10 Multi-Perspective Verification Protocols (6 claim-type-specific protocols + 1 fallback, each with role/freshness/endpoint/goggle tables and minimum-perspective rules). Appended §11 Disagreement Typology (RECENCY-DRIFT, SOURCE-BIAS, DOMAIN-FOCUS, GENUINE-CONTRADICTION, UNCLASSIFIED).
+- **`src/hydra_swarm/skills/hydra-architect/references/brave-search-guide.md`** — Same append (canonical source sync).
+
+### Tests (5 files)
+
+- **`tests/test_hydra_search.py`** (9 tests) — Cache HIT returns cached, MISS calls brave, --no-cache bypass, index-path discovery, CLI arg passthrough
+- **`tests/test_search_index_lookup.py`** (10 tests) — Exact 4-tuple match, no match, missing index, malformed entries skipped, partial-write entries ignored
+- **`tests/test_search_index_append.py`** (25 tests) — Valid write, malformed header rejection, missing fields, invalid freshness, mutual exclusivity validation, first-call file creation, empty-results body, sequential S{n}
+- **`tests/test_e2e_search_index.py`** (4 slow tests) — 15 real Brave API calls across 5 personas. Cache hit on duplicate 4-tuple. --no-cache independent verification. Real URLs in body. All marked `@pytest.mark.slow`.
+- **`conftest.py`** (40 lines) — Registers `--slow` CLI flag. Slow tests skipped without `--slow`.
+
+### Infrastructure changes
+
+- **`.gitignore`** — Added `/skills/` (runtime mirror, not canonical source). `skills/` removed from git tracking via `git rm --cached -r skills/`.
+- **Version bump:** pyproject.toml at 1.3.0 (pre-bumped in prior lifecycle).
+
+### Key architectural decisions
+
+1. **Intentional combos (Version 2), not cartesian product** — 48 permutation cells mostly noise at paid API cost. 2–3 intentional perspectives per claim type, probing orthogonal dimensions.
+2. **Depth gate by perspectives** — Minimum floors per risk tier (L3 high-risk ≥3, adjacent ≥2, peripheral ≥1). No ceiling; user reviews at Perspective Plan checkpoint.
+3. **Disagreement typology** — RECENCY-DRIFT, SOURCE-BIAS, DOMAIN-FOCUS, GENUINE-CONTRADICTION + UNCLASSIFIED. Each tag carries resolution heuristic.
+4. **Strict 4-tuple cache match** — No semantic similarity (false-positive risk > wasted API call cost).
+5. **Markdown as index store** — Human-auditable, LLM-native, crash-recoverable. SQLite/vectorDB explicitly rejected.
+6. **Mechanical cache enforcement** via `hydra_search.py` wrapper — eliminates agent compliance failure mode.
+7. **Adversary `--no-cache` bypass** — Independent verification logs as `independent_verification=true`.
+8. **Tmux session slug disambiguation** — Prevents "duplicate session" collisions across concurrent projects.
+9. **Guide stays `brave-search-guide.md`** — Named for content (Brave API strategy), not caller (`hydra_search.py`).
+
+### Discoveries filed
+
+| Tag | Finding | Resolution |
+|-----|---------|------------|
+| `[HYDRA_DISCOVERY]` | `src/hydra_swarm/skills/` and `src/hydra_swarm/agents/` are stale V1.0 snapshots — 25-line drift from runtime counterparts. `pip install hydra-swarm` ships different version than dev repo. | Needs one-shot sync pass or build-time copy step. Out of scope. Filed to `wiki/architecture.md`. |
+| `[HYDRA_DISCOVERY]` | `uv.lock` stale (1.2.0 vs pyproject.toml 1.3.0). Not git-tracked but should be after regeneration. | Run `uv lock` to regenerate with 1.3.0. |
+| `[HYDRA_DISCOVERY]` | `hydra_search.py` originally hardcoded `claim_id="auto"` — broke cross-referencing. | Fixed via `--claim-id` / `--perspective-id` CLI args. |
+
+### Test results
+
+- **Fast suite:** 227 passed, 1 skipped, 8 deselected in 6.20s
+- **Slow E2E:** 4 passed in 26.73s
+- **Total:** 231 tests, 0 failures
+
+### Files changed
+
+```
+Created:  skills/hydra-architect/scripts/hydra_search.py          (cache-aware wrapper)
+Created:  skills/hydra-architect/scripts/search_index_lookup.py   (4-tuple exact match)
+Created:  skills/hydra-architect/scripts/search_index_append.py   (validated append)
+Created:  conftest.py                                             (--slow flag)
+Created:  tests/test_hydra_search.py                              (9 tests)
+Created:  tests/test_search_index_lookup.py                       (10 tests)
+Created:  tests/test_search_index_append.py                       (25 tests)
+Created:  tests/test_e2e_search_index.py                          (4 slow tests)
+Modified: .gitignore                                              (added /skills/)
+Modified: skills/hydra-architect/SKILL.md                         (+211 lines)
+Modified: skills/hydra-architect/references/brave-search-guide.md (+145 lines)
+Modified: src/hydra_swarm/skills/hydra-architect/SKILL.md         (+211 lines)
+Modified: src/hydra_swarm/skills/hydra-architect/references/brave-search-guide.md (+145 lines)
+Modified: src/hydra_swarm/agents/hydra-architect.md               (26 lines)
+Modified: src/hydra_swarm/agents/hydra-conductor.md               (36 lines)
+Modified: src/hydra_swarm/agents/hydra-librarian.md               (14 lines)
+Modified: src/hydra_swarm/agents/blueprint.md                     (4 lines)
+Modified: src/hydra_swarm/agents/builder.md                       (4 lines)
+Modified: src/hydra_swarm/agents/adversary.md                     (11 lines)
+Modified: src/hydra_swarm/agents/defender.md                      (4 lines)
+Modified: tests/test_brave_search.py                              (46 lines)
+Modified: tests/test_defender.py                                  (skip guard)
+
+Total: 8 created, 14 modified, 0 deleted
+Tests: 231/231 passing
+```
+
+### Wiki updates (Librarian)
+
+5 wiki pages updated, 0 contradictions remaining (all resolved). Statuses bumped to V1.3:
+- `wiki/architecture.md` — Two-Phase Verification Architecture section (replaced Two-Backend), 15 new design decisions, search index artifact in runtime tree, HYDRA_DISCOVERIES section
+- `wiki/components/architect.md` — Two-Phase Search Index Protocol (replaced Two-Backend), disagreement typology, depth gate, cache semantics. Status: V1.3.
+- `wiki/components/orchestrator-loop.md` — Tmux session names with slug, search index protocol in default mode flow, 3 new design decisions. Status: V1.3.
+- `wiki/components/librarian.md` — `brave_search.py` → `hydra_search.py` mechanical fix. Status: V1.3.
+- `wiki/log.md` — this entry
+
+### Next steps
+
+- Manual end-to-end test: `hydra run "goal"` on a real project — observe Perspective Plan checkpoint, GATHER/ANALYZE phases, cache HIT/MISS logging
+- Verify tmux session slug disambiguation with concurrent Hydra runs
+- Run `uv lock` to regenerate lockfile at 1.3.0, then `git add uv.lock`
+- One-shot sync: align `src/hydra_swarm/skills/` and `src/hydra_swarm/agents/` with their runtime counterparts
+- Publish V1.3 to PyPI

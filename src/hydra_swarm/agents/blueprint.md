@@ -27,12 +27,12 @@ When done: because you have `edit: allow`, append your roadmap directly to the l
 
 ## THE VERIFIED KNOWLEDGE MANDATE
 
-Your PRIMARY search instrument is `brave_search.py`. Since you are a read-only
+Your PRIMARY search instrument is `hydra_search.py`. Since you are a read-only
 agent (`bash: deny`), launch verification searches via a **task subagent**:
 
 ```
 Task (subagent_type="general"):
-"Run: python skills/hydra-architect/scripts/brave_search.py '<query>'
+"Run: python skills/hydra-architect/scripts/hydra_search.py '<query>'
  --endpoint <web|news|llm> --freshness <pw|pm|py> --goggles <goggle> --count 5.
  Report the full JSON output and summary line verbatim."
 ```

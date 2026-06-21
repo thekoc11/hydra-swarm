@@ -6,7 +6,7 @@
 - **Dependencies:** Hermes Agent (3 skills), OpenCode (4 agent configs), tmux
 
 ## Current Status
-IMPLEMENTED
+IMPLEMENTED (V1.3 — search index protocol, slug-disambiguated tmux sessions)
 
 ## Architecture: Hermes Conductor + OpenCode Musicians
 
@@ -90,9 +90,9 @@ The `-s` flag preloads the named SKILL.md before the first turn.
 ### Tmux session management
 
 OpenCode agents run in dedicated tmux windows (launched by `hydra-proceed` skill):
-- **`hydra_bp`**: Blueprint + Builder (single session — builder is a Task subagent)
-- **`hydra_adv`**: Adversary (read-only, reports in terminal)
-- **`hydra_def`**: Defender (only for large scopes — >3 flaws or >5 files)
+- **`hydra_bp_<slug>`**: Blueprint + Builder (single session — builder is a Task subagent)
+- **`hydra_adv_<slug>`**: Adversary (read-only, reports in terminal)
+- **`hydra_def_<slug>`**: Defender (only for large scopes — >3 flaws or >5 files)
 
 Hermes launches sessions with `tmux new-session -d` (detached — returns immediately)
 and tells the user the attach command. The user works in tmux, detaches when done,
@@ -101,7 +101,7 @@ completion (LLM comprehension, not regex).
 
 ### Conversational greenlighting
 
-After the adversary runs, Hermes captures output via `tmux capture-pane -t hydra_adv
+After the adversary runs, Hermes captures output via `tmux capture-pane -t hydra_adv_<slug>
 -p -S -1000`, extracts flaws using LLM comprehension, formats them with `[FLAW]`
 severity tags, and writes the `## Adversary` section to the lifecycle. It then presents
 the flaws conversationally: "3 flaws found. The critical one is #1. Fix which?"
@@ -190,9 +190,10 @@ The mapping is a hardcoded `SKILL_TO_AGENT` dict in `cli.py`. Only one entry whe
   directly. Large scopes get isolated OpenCode context. Threshold: ≤3 flaws AND
   ≤5 files. Tunable after usage data.
 - **[2026-05-30] Two-backend verification (Pillar 2).** All agents use
-  `brave_search.py` (paid Brave API: freshness, goggles, llm/news endpoints).
+  `hydra_search.py` (cache-aware wrapper → `brave_search.py` as internal backend).
   Hermes cross-checks with `web_search()` (independent Firecrawl/Tool Gateway
-  index). Cross-index agreement = high confidence.
+  index). V1.3 adds per-run search index with strict 4-tuple caching,
+  multi-perspective combos, and disagreement typology.
 - **[2026-05-31] `--no-hermes` dual-runtime flag.** Additive, opt-in. Hermes
   remains default. Users can A/B test both runtimes. Three new OpenCode agent
   configs (`hydra-architect.md`, `hydra-conductor.md`, `hydra-librarian.md`)
@@ -210,6 +211,8 @@ The mapping is a hardcoded `SKILL_TO_AGENT` dict in `cli.py`. Only one entry whe
   passing unresolvable agent names. Prevents launching non-existent agents.
 - ~~[2026-05-31] Configurable session timeout.~~ → **REMOVED (2026-06-05)** | `HYDRA_SESSION_TIMEOUT` env var and `timeout=` kwarg from both launch functions were removed entirely. Sessions now run indefinitely — users monitor via tmux.
 - **[2026-06-05] `hydra continue` command.** | Paginated session browser (20 sessions, 5 per page). Interactive selection: Enter for more, q to quit, number to select. Launches via `opencode -s <id>` (default) or `hermes --continue <id> chat` (`--use-hermes`). Parses tabular output from both tools with fail-safe raw-output fallback. `--fork` flag for opencode (silently ignored for hermes). Deliberately bypasses preflight gate, agent/skill setup, and `.hydra_experiments` writes. |
+| **[2026-06-21] Tmux session names include lifecycle slug.** | Fixed names (`hydra_bp`, `hydra_adv`, `hydra_def`) collide across concurrent projects. Names now include the slug the conductor already reads from the lifecycle: `hydra_bp_<slug>`, `hydra_adv_<slug>`, `hydra_def_<slug>`. Disambiguation is mechanical, not manual. |
+| **[2026-06-21] Two-phase search index protocol in default mode.** | Architect's verification upgraded from inline-read interleaving to PERSPECTIVE PLAN → GATHER → ANALYZE. The conductor's default mode flow now reflects: Phase 0 Perspective Plan (blocking checkpoint), Phase 1 GATHER (per-perspective `hydra_search.py` calls with caching), Phase 2 ANALYZE (cross-reference search index, tag disagreements). |
 
 ---
 
@@ -222,7 +225,9 @@ hydra run "Add a /health endpoint"
    → opencode --agent hydra-architect
 
 2. OpenCode (architect):
-   ├─ brave_search.py: FastAPI health check patterns
+   ├─ hydra_search.py: Phase 0 Perspective Plan (claims → combos → user approval)
+   ├─ GATHER phase: hydra_search.py per perspective (cached)
+   ├─ ANALYZE phase: cross-reference index, tag disagreements
    ├─ webfetch: cross-check against official docs
    ├─ Explores codebase, discovers test_command from pyproject.toml
    ├─ Complexity: Level 1 — boilerplate. Pipeline: [impl]
@@ -236,7 +241,7 @@ hydra run "Add a /health endpoint"
 4. OpenCode (conductor):
    ├─ Reads lifecycle → pipeline [impl]
    ├─ Writes Blueprint Directive → launches tmux
-   ├─ User attaches: tmux attach -t hydra_health_endpoint_bp
+   ├─ User attaches: tmux attach -t hydra_bp_<slug>
    │   └─ Blueprint plans → spawns builder (Task subagent)
    │       Builder implements GET /health, runs tests
    │       Builder appends ## Builder diff to lifecycle
@@ -276,7 +281,8 @@ hydra run "Add a /health endpoint"
 - `SKILL_TO_AGENT` dict maps Hermes skill names to OpenCode agent names. Hardcoded in `cli.py`. Only `hydra-proceed` → `hydra-conductor` differs.
 - `_detect_phase()` returns Hermes skill names — caller maps to agents when `--use-hermes` is NOT set (default OpenCode path).
 - **`hydra continue`**: Paginated session browser. No preflight gate, no `.hydra_experiments` writes. Parses `opencode session list` / `hermes sessions list` tabular output. `--fork` silently ignored for hermes (no equivalent flag). 26 tests in `tests/test_continue.py`.
-- Stale-agent warnings now prefixed with `[HYDRA]` for scannability in stderr output.
+- **`hydra_search.py` as mandatory verification entrypoint (V1.3):** All search calls go through `hydra_search.py` (cache-aware wrapper). `brave_search.py` is now an internal backend, not user-facing. Agents call `hydra_search.py` with `--claim-id` and `--perspective-id` for cross-referencing. Conductor reads `## Slug` from lifecycle for tmux session naming.
+- **Tmux session naming (V1.3):** Includes lifecycle slug for disambiguation: `hydra_bp_<slug>`, `hydra_adv_<slug>`, `hydra_def_<slug>`. The conductor reads `## Slug` from the lifecycle at phase-launch time.
 - Lifecycle is markdown (not JSON) — human-readable system of record
 - `current_lifecycle.txt` is the indirection pointer — agents follow it, don't search
 - Completion tags preserved for human readability and lightweight `cli.py` resume detection

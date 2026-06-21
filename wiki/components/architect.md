@@ -6,7 +6,7 @@
 - **Dependencies:** OpenCode CLI (`hydra-architect` agent config, default) **OR** Hermes Agent (`hydra-architect` skill, `--use-hermes` opt-in). Brave Search API key (optional, for paid features)
 
 ## Current Status
-IMPLEMENTED (V1.2 dual-runtime)
+IMPLEMENTED (V1.3 — search index protocol + cache-aware verification)
 
 ## Architecture
 
@@ -47,11 +47,11 @@ The Architect proactively offers Stage 2 after Stage 1, rather than waiting for 
 
 The Architect assesses complexity from the goal text and scales its interrogation:
 
-| Level | Trigger | Behaviour |
-|-------|---------|-----------|
-| **Level 1** | Trivial boilerplate, ~1-2 files, no security/auth keywords | Quick verify → present → CONVERGE. Minimal questioning. |
-| **Level 2** | Moderate changes, 3-5 files, some domain complexity | Standard interrogation with 2-3 clarifying questions. |
-| **Level 3** | Security, auth, >5 files, complex architectural changes | Full Socratic with deep questioning, architecture review, external verification of every significant claim. |
+| Level | Signal | Pipeline | Index |
+|-------|--------|----------|-------|
+| **Level 1** | Trivial boilerplate, ≤2 files, no security/auth | `[impl]` | **Skipped.** Single top-result line in lifecycle. |
+| **Level 2** | 2-3 clarifying questions, verify external claims | `[impl]` or `[impl, adversary]` | **Required if >1 claim needs verification.** ≥1 perspective per claim; ≥2 for high-risk. |
+| **Level 3** | Security/auth, data/persistence, >5 files | `[impl, adversary, defender]` | **Required.** Full Perspective Plan checkpoint. ≥3 perspectives per high-risk, ≥2 adjacent, ≥1 peripheral. |
 
 The user can override: "No, go deeper on this."
 
@@ -62,52 +62,103 @@ The user can override: "No, go deeper on this."
 - Codebase size and complexity
 - Resume vs. fresh start (partial lifecycle = less interrogation needed)
 
+### Depth Gate by Perspectives
+
+For Level 2 and Level 3, the number of verification perspectives per claim is gated by risk tier:
+
+| Level | High-risk claims¹ | Adjacent claims² | Peripheral claims³ |
+|-------|-------------------|------------------|--------------------|
+| L1 | N/A (index skipped) | N/A | N/A |
+| L2 | ≥1 | ≥1 | 0 |
+| L3 | ≥3 | ≥2 | ≥1 |
+
+¹ Claims touching security, auth, data persistence, external deps, or keywords triggering Level 3.
+² Claims about libraries/patterns high-risk claims depend on.
+³ Contextual claims ("is this a common pattern?") — nice to know, not load-bearing.
+
+**Minimums are floors, not ceilings.** The Architect may propose more perspectives when a claim is genuinely ambiguous. The user reviews and approves at the Perspective Plan checkpoint.
+
 ---
 
-## Two-Backend Verification Protocol (Pillar 2 Execution)
+## Two-Phase Search Index Protocol (Pillar 2 Execution — V1.3)
 
-Every factual claim during architect interrogation is verified in two layers:
+V1.3 replaces the single-query verification model with a structured two-phase protocol backed by a cache-aware search index.
 
-### Layer 1: Primary — `brave_search.py`
-The paid Brave Search API with precision filtering:
-- **`--endpoint llm`** (default): Pre-extracted text chunks optimized for LLM consumption. Supports token budgets and relevance thresholds.
-- **`--endpoint web`**: Human-oriented search results with rich snippets.
-- **`--endpoint news`**: Dedicated news index for release announcements, CVE disclosures, deprecation notices.
-- **`--freshness pd/pw/pm/py`**: Time-filtered results.
-- **`--goggles <url1,url2,url3>`**: Up to 3 custom reranking profiles (`.goggle` files hosted on GitHub) that boost authoritative sources and deprioritize noise.
+### The Search Entrypoint: `hydra_search.py`
 
-### Layer 2: Cross-check — Hermes `web_search()`
-Hermes's built-in search (Firecrawl/Tool Gateway index) — a completely independent search index. Same query, different backend.
+**MANDATORY: All verification searches go through `hydra_search.py`** — a cache-aware wrapper that delegates to `brave_search.py` as an internal backend. The wrapper provides:
 
-### Resolution
-- **Agreement** → HIGH CONFIDENCE. File the finding.
-- **Divergence** → `webfetch` the conflicting sources directly. Check dates and authority. Escalate to user if unresolved.
+- **Three endpoints**: `llm` (pre-extracted text chunks), `web` (human-oriented), `news` (releases, CVEs)
+- **Freshness filtering**: `pw`/`pm`/`py` — **nested** (`pw ⊂ pm ⊂ py`), not independent windows
+- **Goggles**: Up to 3 custom `.goggle` files for domain-level reranking
+- **Automatic caching**: Strict 4-tuple `(query, freshness, endpoint, goggle)` against per-run `search_index_<ts>.md`
+- **`--no-cache` flag**: Adversary bypass for independent re-verification
+- **`--claim-id` / `--perspective-id`**: For cross-referencing during ANALYZE phase
 
-### Domain Routing
-The Architect selects parameters based on what's being verified:
+**Fallback chain:** `hydra_search.py` → `webfetch` on official sources → MCP `brave-web-search` (last resort). Using MCP before `hydra_search.py` is a protocol violation.
 
-| Verification goal | Endpoint | Freshness | Goggles |
-|-------------------|----------|-----------|---------|
-| Library version (current stable) | `llm` | `pw` | tech-docs |
-| API pattern / best practice | `llm` | `py` | tech-docs |
-| Security vulnerability / CVE | `news` | `pm` | security |
-| Deprecation notice | `news` | `pw` | releases |
-| Academic claim | `web` | `py` | academic |
-| Market/community research | `news` | `py` | *(none)* |
-| Factual claim verification | `llm` | *(none)* | *(none)* |
+### Phase 0 — Perspective Plan (Blocking Checkpoint)
 
-### Goggles — Custom Reranking Profiles
+Before ANY search:
 
-Four purpose-built goggles boost authoritative sources and deprioritize noise:
-- **`hydra-tech-docs`**: Prioritizes readthedocs, pypi.org, github.com/*/releases, official docs
-- **`hydra-security`**: Prioritizes cve.mitre.org, nvd.nist.gov, github.com/advisories, snyk.io
-- **`hydra-academic`**: Prioritizes arxiv.org, scholar.google.com, paperswithcode.com
-- **`hydra-releases`**: Prioritizes pypi.org, github.com/*/releases, official project blogs
+1. **Identify claims** — extract every factual claim needing verification from the user's goal
+2. **Classify claims** by risk tier: high-risk, adjacent, peripheral
+3. **Select perspectives** from the per-claim-type protocol menu in `brave-search-guide.md` §10. Respect depth-gate minimums (see above)
+4. **Present the plan** to the user with estimated API calls. Example:
 
-Max 3 goggles per query. Combinable — e.g. `tech-docs + releases` for version verification.
+> "Perspective Plan:
+> Claim c1 (version check, high-risk): 3 perspectives
+>   - P1: RECENCY (pw + news + hydra-releases)
+>   - P2: DEPTH (py + web + hydra-tech-docs)
+>   - P3: BREADTH (pm + web + none)
+> Claim c2 (API pattern, adjacent): 2 perspectives
+>   - P1: AUTHORITATIVE (py + llm + hydra-tech-docs)
+>   - P2: COMMUNITY (pm + web + none)
+> Estimated API calls: 5. Approve?"
 
-### Why Two Backends
-Verification against a single source is vulnerable to that source's biases. Brave's index might be stale on a particular topic. Firecrawl might miss recent releases. Agreement across independent indexes is stronger evidence than multiple results from the same index.
+5. **Wait** for user approval. Do NOT proceed to GATHER until explicitly approved.
+
+### Phase 1 — GATHER (Pure Collection)
+
+After approval, for each claim and perspective:
+```
+python skills/hydra-architect/scripts/hydra_search.py "<query>" \
+    --freshness <f> --endpoint <e> --goggles <g> \
+    --claim-id <cid> --perspective-id <pid> \
+    --index-path .hydra_experiments/search_index_<timestamp>.md
+```
+
+The wrapper handles caching mechanically — cache HIT returns `[CACHED] S{n}:R{n}`, cache MISS calls `brave_search.py` and appends a structured entry. **No analysis during GATHER.** Pure evidence collection.
+
+### Phase 2 — ANALYZE (Cross-Reference)
+
+After all perspectives gathered:
+
+1. **Read the full index** — all evidence side by side
+2. **Group by claim_id** — examine all perspectives per claim
+3. **Identify consensus / outliers / disagreements** — tag per Disagreement Typology
+4. **Write the Verified Claims table** in the lifecycle, referencing `S{n}:R{n}` evidence
+
+### Disagreement Typology
+
+When perspectives disagree, the Architect tags the disagreement with its causal source:
+
+| Tag | Meaning | Resolution Heuristic |
+|-----|---------|---------------------|
+| **RECENCY-DRIFT** | `pw` says X, `py` says not-X — recent change | Prefer the freshest result. Note the older perspective. |
+| **SOURCE-BIAS** | News says X, academic/web says not-X — editorial slant | Prefer primary sources. File both, weight primary higher. |
+| **DOMAIN-FOCUS** | Different goggles report different truths — both correct, different lenses | Both are true. File with domain annotations. |
+| **GENUINE-CONTRADICTION** | Two sources in the same lens disagree | Escalate as `[NEEDS ADJUDICATION]`. Do NOT guess. |
+| **UNCLASSIFIED** | Edge case not fitting above | Architect's discretion. Explain reasoning. |
+
+Each tag carries its own resolution heuristic — the Architect doesn't have to think about what to do with a disagreement; the tag tells them.
+
+### Cache Semantics
+
+- **Strict 4-tuple exact match** — no semantic similarity, no fuzzy matching. False-negative (wasted API call) costs ~$0.002; false-positive (corrupted evidence) costs unbounded.
+- **Markdown store** — human-auditable, LLM-native, crash-recoverable. No SQLite, no vectorDB.
+- **No staleness check within a run** — Hydra runs complete in hours.
+- **`--no-cache` for Adversary** — independent verification logs as `independent_verification=true`. Budget cost of re-runs is the price of the adversarial property.
 
 ---
 
@@ -146,18 +197,30 @@ Contains: goal, contract, expected builder output format, pre-verified research 
 | 2026-05-30 | Architect is a Hermes conversational skill, not an OpenCode agent | Architect is interrogative and conversational. Hermes is natively conversational — this is its natural mode. |
 | 2026-05-30 | Two-stage convergence (breadth → depth) | Terse contracts starve downstream agents. Stage 2 depth (philosophy, intuition, tradeoffs) is the injection mechanism that lets downstream agents adapt. |
 | 2026-05-30 | Adaptive Socratic depth (Levels 1-3) | Different tasks need different interrogation depth. Trivial boilerplate doesn't need full Socratic; security-critical changes do. |
-| 2026-05-30 | Two-backend verification (Brave + Firecrawl) | Cross-index agreement is stronger than multiple results from the same index. Pillar 2 made rigorous. |
 | 2026-05-30 | Named phases replace numbered states | `[impl, adversary, defender]` is self-documenting. Numbers encoded no structural relationships. |
 | 2026-05-30 | Contract embedded in lifecycle (not separate JSON) | Single source of truth. No parsing gap between contract authoring and contract consumption. |
 | 2026-05-30 | Environment discovery from pyproject.toml | `test_command` discovered, not guessed. User can override. Downstream agents read from contract, never guess. |
+| **2026-06-21** | **Two-phase search index protocol (V1.3)** | Replaces single-query verification with PERSPECTIVE PLAN → GATHER → ANALYZE. Per-run markdown search index with strict 4-tuple caching, mechanical enforcement, and multi-perspective combos. |
+| **2026-06-21** | **Intentional combos, not cartesian product** | Cartesian product (48 combinations) mostly noise at paid API cost. 2-3 intentional perspectives per claim type, probing orthogonal dimensions (temporal, authoritative, community). Query diversity > backend diversity (arXiv 2606.17209). |
+| **2026-06-21** | **Disagreement typology** | RECENCY-DRIFT, SOURCE-BIAS, DOMAIN-FOCUS, GENUINE-CONTRADICTION + UNCLASSIFIED. Each tag carries a resolution heuristic — the Architect doesn't guess what to do with a disagreement. |
+| **2026-06-21** | **Depth gate by perspectives** | Minimum perspectives per claim by risk tier and task level. Floors are mandatory; no ceiling (user reviews at Perspective Plan checkpoint). |
+| **2026-06-21** | **`hydra_search.py` mechanical cache enforcement** | Prompt-enforced relies on agent compliance; mechanical enforcement makes cache-bypass impossible by construction. The entrypoint IS the cache. |
+| **2026-06-21** | **Markdown store (not SQLite/vectorDB)** | Human-auditable, LLM-native, crash-recoverable. SQLite trades auditability for scale we don't need (~30 rows/run). VectorDB semantic matching explicitly rejected. |
+| 2026-05-30 | Two-backend verification (Brave + Firecrawl) → evolved to Two-Phase Search Index Protocol (V1.3) | Cross-index agreement is stronger than multiple results from the same index. V1.3 adds per-run search index, multi-perspective combos, and structured disagreement tagging. |
 
 ## Implementation Notes
 
-- **Hermes path:** Implemented as `skills/hydra-architect/SKILL.md` (~220 lines) with YAML frontmatter
-- **OpenCode path:** Implemented as `src/hydra_swarm/agents/hydra-architect.md` (~260 lines). Core instructions preserved, tool references adapted (`terminal()` → bash, `read_file()` → native file reads, `skill_view()` removed — agent config IS the system prompt). Includes `## GOVERNING PHILOSOPHY` section (Three Pillars + Universal Invariant) and `## VERIFICATION TOOL` section with mandatory-first `brave_search.py` mandate.
+- **Hermes path:** Implemented as `skills/hydra-architect/SKILL.md` (~430 lines) with `## THE TWO-PHASE SEARCH INDEX PROTOCOL` section, YAML frontmatter
+- **OpenCode path:** Implemented as `src/hydra_swarm/agents/hydra-architect.md` (~285 lines). Core instructions preserved, tool references adapted. Includes `## GOVERNING PHILOSOPHY` section (Three Pillars + Universal Invariant) and `## VERIFICATION TOOL` section with mandatory-first `hydra_search.py` mandate.
 - Launched via `opencode --agent hydra-architect` (default) or `hermes chat -s hydra-architect` (`--use-hermes`)
-- Supporting script: `skills/hydra-architect/scripts/brave_search.py` (~270 lines, pure stdlib)
-- Reference guide: `skills/hydra-architect/references/brave-search-guide.md` (~220 lines, 9-section strategic guide for LLMs on search query construction)
+- **Verification scripts (3 new in V1.3):**
+  - `skills/hydra-architect/scripts/hydra_search.py` (~130 lines, pure stdlib) — cache-aware search wrapper
+  - `skills/hydra-architect/scripts/search_index_lookup.py` (~80 lines) — strict 4-tuple exact match against search_index.md
+  - `skills/hydra-architect/scripts/search_index_append.py` (~100 lines) — validated append with structured headers
+  - `skills/hydra-architect/scripts/brave_search.py` (~270 lines) — **internal backend** called by hydra_search.py on cache MISS. Not user-facing.
+- **Reference guide:** `skills/hydra-architect/references/brave-search-guide.md` — 11-section strategic guide (updated V1.3 with §10 combo protocols + §11 disagreement typology)
 - Contract is written directly to lifecycle markdown under `## Architect` section
 - Converged signal: `[HYDRA: CONVERGED]`
-- **brave_search.py mandate language:** Agent config uses prescriptive language ("MANDATORY: Your FIRST action... must be to run brave_search.py via bash") — not descriptive ("PRIMARY search instrument"). Without this, LLMs default to `brave-web-search` MCP and ignore the strategic tool. Fallback chain: brave_search.py → webfetch → MCP (last resort).
+- **hydra_search.py mandate language:** Agent config uses prescriptive language ("MANDATORY: Your FIRST action... must be to run `hydra_search.py` via bash"). The `brave-web-search` MCP tool is a last-resort fallback — using it before `hydra_search.py` is a protocol violation.
+- **Two-phase protocol:** SKILL.md contains exact Phase 0 (Perspective Plan), Phase 1 (GATHER), and Phase 2 (ANALYZE) procedures. Perspective Plan is a blocking checkpoint — user must approve before any search fires.
+- **Search index:** Co-located with lifecycle: `search_index_<timestamp>.md`. Created at first `hydra_search.py` call. Dies at end of run. Not QMD-indexed.

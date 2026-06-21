@@ -161,9 +161,9 @@ def _run_agent_tmux(agent: str, lifecycle: Path, tag: str, label: str, timeout: 
     print(f"→ {label} │ tmux: {session}")
     print(f"  Attach: tmux attach -t {session}")
     if agent == "architect":
-        print(f"  Interact with the architect. Type CONVERGE when ready.")
+        print("  Interact with the architect. Type CONVERGE when ready.")
     else:
-        print(f"  Agent will read lifecycle and execute. CONVERGE when satisfied.")
+        print("  Agent will read lifecycle and execute. CONVERGE when satisfied.")
     print()
 
     while True:
@@ -195,7 +195,7 @@ def _run_architect_tmux(goal: str, lifecycle: Path) -> bool:
     print(f"→ Architect │ tmux: {session}")
     print(f"  Attach: tmux attach -t {session}")
     print(f"  Goal: {goal}")
-    print(f"  Interact with the architect. Type CONVERGE when ready.")
+    print("  Interact with the architect. Type CONVERGE when ready.")
     print()
 
     while True:

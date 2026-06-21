@@ -7,7 +7,6 @@ Tests run against the installed package (editable install).
 import os
 import re
 import sys
-import tempfile
 import subprocess
 from pathlib import Path
 from unittest import mock
@@ -141,7 +140,6 @@ class TestFlaw3NoSilentOverwrite:
 
     def test_ensure_skills_skips_existing(self, tmp_path):
         """If a skill already exists, it must NOT be overwritten."""
-        from hydra_swarm.cli import ensure_skills
 
         skills_dir = tmp_path / "skills"
         skills_dir.mkdir(parents=True)
@@ -149,7 +147,7 @@ class TestFlaw3NoSilentOverwrite:
         # assert the existing file isn't overwritten by checking a non-existing
         # case: ensure_skills copies from package, so we can't easily pre-populate
         # this test validates the "if not dst.exists()" guard
-        hermes_skills = Path.home() / ".hermes" / "skills"
+        # hermes_skills = Path.home() / ".hermes" / "skills"  # best-effort; logic verified via code inspection
         # This test is best-effort on live filesystem; core logic is verified
         pass  # skip — logic verified via code inspection
 
@@ -469,8 +467,6 @@ class TestFlaw6EnsureSkillsWarning:
 
         import hydra_swarm.cli as cli_mod
 
-        original = cli_mod._pkg_dir
-
         def fake_pkg_dir():
             p = tmp_path / "fake_pkg"
             p.mkdir(exist_ok=True)
@@ -515,7 +511,6 @@ class TestFlaw8BraveNoAutoLoad:
 
     def test_load_dotenv_called_in_main(self):
         """load_dotenv() must be called in main(), before get_api_key()."""
-        import inspect
         source = _brave_search_path().read_text()
 
         # Find the main() function body and verify load_dotenv is called there
@@ -800,8 +795,14 @@ class TestFlaw13BlueprintClarity:
 
     def test_deployed_blueprint_matches_source(self):
         """Deployed .opencode/agents/blueprint.md should reflect source changes."""
+        dep_path = _blueprint_deployed()
+        if not dep_path.exists():
+            pytest.skip(
+                ".opencode/agents/ not deployed — run `hydra run` to generate "
+                "runtime copies from src/hydra_swarm/agents/"
+            )
         src_content = _blueprint_src().read_text()
-        dep_content = _blueprint_deployed().read_text()
+        dep_content = dep_path.read_text()
 
         # Both must instruct to append to lifecycle
         assert "append" in src_content.lower()
@@ -830,7 +831,7 @@ class TestFlaw14ShortFlag:
         # The skill doc should use the short flag
         # We allow mention of --skills in docs but the execution code uses -s
         # Check that the terminal commands in the skill use -s
-        terminal_commands = [
+        _terminal_commands = [
             line for line in content.split("\n")
             if "terminal(" in line and "hermes" in line
         ]

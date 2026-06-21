@@ -6,7 +6,7 @@
 - **Dependencies:** OpenCode CLI (`hydra-librarian` agent config, default) **OR** Hermes Agent (`hydra-librarian` skill, `--use-hermes` opt-in). git (for commit)
 
 ## Current Status
-IMPLEMENTED (V1.2 dual-runtime)
+IMPLEMENTED (V1.3 — hydra_search.py verification tool)
 
 ## Dual-Runtime Model (V1.2)
 
@@ -17,7 +17,7 @@ The Librarian is available in two runtimes:
 | **OpenCode agent** (default) | `hydra retain` | `opencode --agent hydra-librarian`. The agent config IS the system prompt. |
 | **Hermes skill** (opt-in) | `hydra --use-hermes retain` | `hermes chat -s hydra-librarian`. Conversational Hermes session. |
 
-Both paths preserve: knowledge extraction, cross-reference protocol, conversational refinement, commit barrier. The OpenCode agent config includes a `## GOVERNING PHILOSOPHY` section (Three Pillars + Universal Invariant) and a `## VERIFICATION TOOL` section mandating `brave_search.py` as the primary search instrument.
+Both paths preserve: knowledge extraction, cross-reference protocol, conversational refinement, commit barrier. The OpenCode agent config includes a `## GOVERNING PHILOSOPHY` section (Three Pillars + Universal Invariant) and a `## VERIFICATION TOOL` section mandating `hydra_search.py` as the primary search instrument.
 
 ## Core Shift: OpenCode Agent → Hermes Conversational Skill
 
@@ -161,7 +161,7 @@ This is the lint cycle from `llm__wiki.md` applied to Hydra's own wiki.
 ## Implementation Notes
 
 - **Hermes path:** Implemented as `skills/hydra-librarian/SKILL.md` (~180 lines) with YAML frontmatter
-- **OpenCode path:** Implemented as `src/hydra_swarm/agents/hydra-librarian.md` (~270 lines). Core instructions preserved, tool references adapted. Includes `## GOVERNING PHILOSOPHY` section (the Librarian IS the Keystone — embodies Pillar 1) and `## VERIFICATION TOOL` section with `brave_search.py` primary mandate.
+- **OpenCode path:** Implemented as `src/hydra_swarm/agents/hydra-librarian.md` (~270 lines). Core instructions preserved, tool references adapted. Includes `## GOVERNING PHILOSOPHY` section (the Librarian IS the Keystone — embodies Pillar 1) and `## VERIFICATION TOOL` section with `hydra_search.py` primary mandate.
 - Launched via `opencode --agent hydra-librarian` (default) or `hermes chat -s hydra-librarian` (`--use-hermes`)
 - Reads lifecycle via `current_lifecycle.txt` pointer
 - Discovers wiki pages via `glob wiki/*.md` + `glob wiki/components/*.md`

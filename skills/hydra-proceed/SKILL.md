@@ -95,11 +95,66 @@ If the pipeline includes `[adversary]`:
 4. **Wait** for the user to say "done."
 
 5. **On "done" — capture adversary output:**
+   **PRIMARY method: Read from OpenCode session database.** OpenCode stores all
+   agent output in a SQLite database at `~/.local/share/opencode/opencode.db`.
+   Query it for the adversary session's text output — reliable, exact text:
+
+   **Step 1 — Find the most recent adversary session:**
    ```
-   terminal("tmux capture-pane -t hydra_adv -p -S -1000")
+   terminal("python3 -c \"
+   import sqlite3, os
+   db = os.path.expanduser('~/.local/share/opencode/opencode.db')
+   conn = sqlite3.connect(db)
+   row = conn.execute('''
+       SELECT id, slug, title
+       FROM session
+       WHERE agent = ''adversary''
+       ORDER BY time_created DESC LIMIT 1
+   ''').fetchone()
+   if row:
+       print(f'SESSION_ID={row[0]}')
+       print(f'slug={row[1]}')
+       print(f'title={row[2]}')
+   else:
+       print('NO_ADVERSARY_SESSION')
+   \"")
    ```
-   This captures the last 1000 lines of the tmux pane. Use LLM comprehension to
-   extract all flaws from the output. Format as a `## Adversary` section:
+
+   **Step 2 — Read the full adversary output (all assistant text parts):**
+   ```
+   terminal("python3 -c \"
+   import sqlite3, json, os
+   db = os.path.expanduser('~/.local/share/opencode/opencode.db')
+   conn = sqlite3.connect(db)
+   rows = conn.execute('''
+       SELECT json_extract(p.data, '$.text') as text
+       FROM message m
+       JOIN part p ON p.message_id = m.id
+       WHERE m.session_id = (
+           SELECT id FROM session
+           WHERE agent = ''adversary''
+           ORDER BY time_created DESC LIMIT 1
+       )
+       AND json_extract(m.data, '$.role') = ''assistant''
+       AND json_extract(p.data, '$.type') = ''text''
+       ORDER BY m.time_created, p.time_created
+   ''').fetchall()
+   for (text,) in rows:
+       if text:
+           print(text)
+   \"")
+   ```
+   Schema notes: OpenCode uses `session`/`message`/`part` (singular table names),
+   `time_created` as Unix epoch INTEGER, and JSON blobs in `data` columns.
+   Message role is `json_extract(m.data, '$.role')`. Text content is in
+   `part` rows where `json_extract(p.data, '$.type') = 'text'`.
+
+   **FALLBACK only if database fails:** `tmux capture-pane -t hydra_adv -p -S -1000`.
+   The TUI capture is unreliable with OpenCode's rendering — ANSI codes, wrapping
+   artifacts, and truncated lines. Use only as a last resort.
+
+   Once the adversary output is obtained, use LLM comprehension to extract all
+   flaws. Format as a `## Adversary` section:
    ```markdown
    ## Adversary
    [FLAW] CRITICAL <description>

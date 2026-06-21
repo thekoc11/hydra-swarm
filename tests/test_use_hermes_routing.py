@@ -220,7 +220,7 @@ class TestUseHermesProceedRouting:
         sentinel = experiments / ".preflight_passed"
         sentinel.write_text("version: 1.2.0\nchecked_at: 2026-06-01T00:00:00Z\nchecks_passed: tmux, git, opencode, env_file, brave_api_key\n")
 
-        calls = _setup_mocks(tmp_path, monkeypatch, cli_mod)
+        _calls = _setup_mocks(tmp_path, monkeypatch, cli_mod)
 
         with pytest.raises(SystemExit) as exc_info:
             cli_mod.main(["proceed"])
@@ -431,8 +431,10 @@ class TestUseHermesFlagPosition:
 
         _setup_mocks(tmp_path, monkeypatch, cli_mod)
         # Mock preflight checks to always pass
-        monkeypatch.setattr(cli_mod, "_run_preflight_checks", lambda: (True, []))
-        monkeypatch.setattr(cli_mod, "_write_preflight_sentinel", lambda x: None)
+        monkeypatch.setattr(cli_mod, "_run_preflight_checks",
+                            lambda: (True, [], {}))
+        monkeypatch.setattr(cli_mod, "_write_preflight_sentinel",
+                            lambda x, status=None: None)
 
         cli_mod.main(["--use-hermes", "check"])
         # Should not crash

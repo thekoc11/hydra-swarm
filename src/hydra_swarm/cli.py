@@ -105,13 +105,20 @@ def _parse_env_value(env_path: Path, key: str) -> str | None:
     return None
 
 
-def _run_preflight_checks() -> tuple[bool, list[str]]:
-    """Run all 5 pre-flight checks.
+def _run_preflight_checks() -> tuple[bool, list[str], dict[str, str]]:
+    """Run all pre-flight checks.
+
+    Checks 1-5 are hard dependencies (tmux, git, opencode, .env, Brave API key).
+    Checks 6-7 (ruff, mypy) are dev tools — absence is a warning, not a failure.
+    Check 8 (pytest) is a regression gate — failures are failures.
 
     Returns:
-        (all_passed: bool, failed_names: list[str])
+        (all_passed: bool, failed_names: list[str], status: dict[str, str])
+        status keys: "ruff", "mypy", "pytest" with values in
+        {"installed", "not_installed", "passed", "failed", "skipped"}.
     """
     failed: list[str] = []
+    status: dict[str, str] = {}
 
     # 1. tmux
     if not shutil.which("tmux"):
@@ -183,19 +190,134 @@ def _run_preflight_checks() -> tuple[bool, list[str]]:
         print("  Get one at: https://api.search.brave.com", file=sys.stderr)
         failed.append("brave_api_key")
 
-    return (len(failed) == 0, failed)
+    # 6. ruff (dev dependency — absence is a warning, not a failure)
+    ruff_bin = shutil.which("ruff")
+    if ruff_bin:
+        try:
+            result = subprocess.run(
+                [ruff_bin, "check", "src/", "tests/", "conftest.py"],
+                capture_output=True, text=True, timeout=60,
+            )
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            print(f"✗ ruff check failed to run: {exc}", file=sys.stderr)
+            failed.append("ruff")
+            status["ruff"] = "failed"
+        else:
+            if result.returncode != 0:
+                print("✗ ruff found issues:", file=sys.stderr)
+                print(result.stdout, file=sys.stderr)
+                if result.stderr:
+                    print(result.stderr, file=sys.stderr)
+                failed.append("ruff")
+                status["ruff"] = "failed"
+            else:
+                print("✓ ruff: no issues")
+                status["ruff"] = "passed"
+    else:
+        print(
+            "⚠ ruff not installed — code quality checks skipped.",
+            file=sys.stderr,
+        )
+        print("  Install: pip install ruff", file=sys.stderr)
+        status["ruff"] = "not_installed"
+
+    # 7. mypy (dev dependency — absence is a warning, not a failure)
+    mypy_bin = shutil.which("mypy")
+    if mypy_bin:
+        try:
+            result = subprocess.run(
+                [mypy_bin, "src/hydra_swarm/skills/hydra-architect/scripts/"],
+                capture_output=True, text=True, timeout=120,
+            )
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            print(f"✗ mypy check failed to run: {exc}", file=sys.stderr)
+            failed.append("mypy")
+            status["mypy"] = "failed"
+        else:
+            if result.returncode != 0:
+                print("✗ mypy found issues:", file=sys.stderr)
+                print(result.stdout, file=sys.stderr)
+                if result.stderr:
+                    print(result.stderr, file=sys.stderr)
+                failed.append("mypy")
+                status["mypy"] = "failed"
+            else:
+                print("✓ mypy: no issues")
+                status["mypy"] = "passed"
+    else:
+        print(
+            "⚠ mypy not installed — type checks skipped.",
+            file=sys.stderr,
+        )
+        print("  Install: pip install mypy", file=sys.stderr)
+        status["mypy"] = "not_installed"
+
+    # 8. pytest (regression gate — failures are failures)
+    pytest_bin = shutil.which("pytest")
+    if pytest_bin:
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "pytest", "tests/",
+                 "-k", "not slow", "-q", "--tb=short"],
+                capture_output=True, text=True, timeout=300,
+            )
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            print(f"✗ pytest failed to run: {exc}", file=sys.stderr)
+            failed.append("pytest")
+            status["pytest"] = "failed"
+        else:
+            if result.returncode != 0:
+                print("✗ pytest found failures:", file=sys.stderr)
+                print(result.stdout, file=sys.stderr)
+                if result.stderr:
+                    print(result.stderr, file=sys.stderr)
+                failed.append("pytest")
+                status["pytest"] = "failed"
+            else:
+                # Print the pytest summary line (last non-empty stdout line)
+                summary_line = ""
+                for line in result.stdout.splitlines()[::-1]:
+                    if line.strip():
+                        summary_line = line.strip()
+                        break
+                print(f"✓ pytest: {summary_line}")
+                status["pytest"] = "passed"
+    else:
+        print("✗ pytest not installed — cannot run regression tests.",
+              file=sys.stderr)
+        print("  Install: pip install pytest", file=sys.stderr)
+        failed.append("pytest")
+        status["pytest"] = "not_installed"
+
+    return (len(failed) == 0, failed, status)
 
 
-def _write_preflight_sentinel(experiments_dir: Path) -> None:
-    """Write the .preflight_passed sentinel after successful pre-flight checks."""
+def _write_preflight_sentinel(
+    experiments_dir: Path,
+    status: dict[str, str] | None = None,
+) -> None:
+    """Write the .preflight_passed sentinel after successful pre-flight checks.
+
+    The optional *status* dict carries the result of the ruff/mypy/pytest
+    checks (installed/not_installed/passed/failed) so the sentinel records
+    exactly which checks ran.
+    """
     version = _get_hydra_version()
     checked_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     sentinel = experiments_dir / ".preflight_passed"
     experiments_dir.mkdir(parents=True, exist_ok=True)
+    if status is None:
+        status = {}
+    ruff_state = status.get("ruff", "skipped")
+    mypy_state = status.get("mypy", "skipped")
+    pytest_state = status.get("pytest", "skipped")
     sentinel.write_text(
         f"version: {version}\n"
         f"checked_at: {checked_at}\n"
         f"checks_passed: tmux, git, opencode, env_file, brave_api_key\n"
+        f"ruff: {ruff_state}\n"
+        f"mypy: {mypy_state}\n"
+        f"pytest: {pytest_state}\n"
     )
 
 
@@ -613,7 +735,6 @@ def _list_sessions_hermes(max_sessions: int = 20) -> list[dict]:
         # Header words: ["Title", "Preview", "Last", "Active", "ID"]
         # But "Last Active" is two words → we need the combined column
         # Strategy: use header split() positions to match columns
-        header_lower = header.lower()
         title_idx = None
         last_active_idx = None
         id_idx = None
@@ -860,10 +981,10 @@ def main(argv: list[str] | None = None) -> None:
                 "Note: --use-hermes has no effect on 'hydra check'.",
                 file=sys.stderr,
             )
-        passed, _failed = _run_preflight_checks()
+        passed, _failed, status = _run_preflight_checks()
         if not passed:
             sys.exit(1)
-        _write_preflight_sentinel(cwd / ".hydra_experiments")
+        _write_preflight_sentinel(cwd / ".hydra_experiments", status)
         print("All checks passed. Hydra is ready.")
 
     # ── hydra run "<goal>" ────────────────────────────────────────────────

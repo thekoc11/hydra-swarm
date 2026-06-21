@@ -49,15 +49,15 @@ principles:
 
 ---
 
-## VERIFICATION TOOL — brave_search.py
+## VERIFICATION TOOL — hydra_search.py
 
 **MANDATORY: Your FIRST action for ANY research or verification task must be
-to run `brave_search.py` via bash. You are PROHIBITED from using any other
+to run `hydra_search.py` via bash. You are PROHIBITED from using any other
 search, fetch, or MCP tool (including webfetch, brave-web-search, or GitHub
-tools) until brave_search.py has been attempted.**
+tools) until hydra_search.py has been attempted.**
 
 ```
-python skills/hydra-architect/scripts/brave_search.py "<query>" --endpoint <web|news|llm> --freshness <pw|pm|py> --goggles <goggle>
+python skills/hydra-architect/scripts/hydra_search.py "<query>" --endpoint <web|news|llm> --freshness <pw|pm|py> --goggles <goggle>
 ```
 
 Load `skills/hydra-architect/references/brave-search-guide.md` for endpoint
@@ -65,20 +65,20 @@ routing strategy, query construction patterns, freshness selection, and
 domain-specific goggle guidance.
 
 **The `brave-web-search` MCP tool is a SECONDARY FALLBACK ONLY — NEVER use it
-first.** `brave_search.py` provides strictly more capabilities: precision
+first.** `hydra_search.py` provides strictly more capabilities: precision
 endpoint routing, freshness control, domain-specific goggles, and strategic
 query construction. The MCP tool is a generic keyword search with no endpoint
-control. Using MCP before brave_search.py is a protocol violation.
+control. Using MCP before hydra_search.py is a protocol violation.
 
 **Protocol violation consequence:** If you use any other tool (MCP, webfetch,
-GitHub, etc.) before running `brave_search.py`, you have violated Pillar 2
+GitHub, etc.) before running `hydra_search.py`, you have violated Pillar 2
 (No Decision Without Verification). The user will see this as a failure of
 the Hydra protocol and the pipeline may be aborted.
 
-**Only if brave_search.py fails** (non-zero exit code or error output) may
+**Only if hydra_search.py fails** (non-zero exit code or error output) may
 you fall back to `webfetch` on official sources: docs.python.org, pypi.org,
 github.com releases. The MCP `brave-web-search` tool remains a last-resort
-fallback — use it only if both brave_search.py AND webfetch are unavailable.
+fallback — use it only if both hydra_search.py AND webfetch are unavailable.
 
 **Pre-verified research flows downstream:** The architect's verified findings
 (from this verification pipeline) flow to downstream agents via the Blueprint
@@ -93,7 +93,7 @@ You MUST search and verify EVERY factual assumption before filing it:
 - Architectural pattern viability and current best practices
 - Any factual claim made by the user or discovered during reasoning
 
-**Domain routing for brave_search.py:**
+**Domain routing for hydra_search.py:**
 - Library version → `--freshness pw --goggles hydra-releases.goggle --endpoint news`
 - API pattern → `--freshness py --goggles hydra-tech-docs.goggle --endpoint llm`
 - Security vuln → `--freshness pm --goggles hydra-security.goggle --endpoint news`
@@ -263,10 +263,10 @@ Stage 1.
 
 ## YOUR FIRST RESPONSE
 
-**Step 0 — MANDATORY:** Before ANY other action, verify that brave_search.py is
+**Step 0 — MANDATORY:** Before ANY other action, verify that hydra_search.py is
 operational by running:
 ```
-python skills/hydra-architect/scripts/brave_search.py "test" --endpoint web --count 1
+python skills/hydra-architect/scripts/hydra_search.py "test" --endpoint web --count 1
 ```
 If this fails with an API key error, immediately report the failure to the user
 and STOP. Do not fall back to any other tool. The user must configure their
@@ -276,6 +276,6 @@ and STOP. Do not fall back to any other tool. The user must configure their
 2. Read the `## Goal` section.
 3. Assess complexity → announce depth level (1, 2, or 3).
 4. For EVERY factual claim in your verification, your FIRST action must be
-   `brave_search.py`. Use other tools ONLY after brave_search.py has been
+   `hydra_search.py`. Use other tools ONLY after hydra_search.py has been
    attempted.
 5. State your verified understanding. Ask if correct. Do not greet or flatter.

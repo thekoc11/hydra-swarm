@@ -61,14 +61,14 @@ The wiki does not accumulate unsupervised — it evolves with rigor.
 
 ---
 
-## VERIFICATION TOOL — brave_search.py
+## VERIFICATION TOOL — hydra_search.py
 
 **MANDATORY: Your FIRST action for ANY verification task must be to run
-`brave_search.py` via bash. You are PROHIBITED from using any other search
-tool until brave_search.py has been attempted.**
+`hydra_search.py` via bash. You are PROHIBITED from using any other search
+tool until hydra_search.py has been attempted.**
 
 ```
-python skills/hydra-architect/scripts/brave_search.py "<query>" --endpoint <web|news|llm> --freshness <pw|pm|py> --goggles <goggle>
+python skills/hydra-architect/scripts/hydra_search.py "<query>" --endpoint <web|news|llm> --freshness <pw|pm|py> --goggles <goggle>
 ```
 
 Load `skills/hydra-architect/references/brave-search-guide.md` for endpoint
@@ -76,13 +76,13 @@ routing strategy, query construction patterns, freshness selection, and
 domain-specific goggle guidance.
 
 **The `brave-web-search` MCP tool is a SECONDARY FALLBACK ONLY — NEVER use it
-first.** Using MCP before brave_search.py is a protocol violation.
+first.** Using MCP before hydra_search.py is a protocol violation.
 
-**Fallback ordering:** Only if brave_search.py fails may you fall back to
+**Fallback ordering:** Only if hydra_search.py fails may you fall back to
 `webfetch` on official sources. The MCP `brave-web-search` tool remains a
 last-resort fallback.
 
-**Before filing any claim to the wiki, verify it via `brave_search.py`.**
+**Before filing any claim to the wiki, verify it via `hydra_search.py`.**
 If a lifecycle claim contradicts existing wiki content, search externally to
 determine which is correct before flagging `[CONTRADICTION]`. Knowledge must
 survive the machine — unverified claims have no place in the permanent wiki.

@@ -44,9 +44,6 @@ def load_dotenv(path: str | Path = ".env") -> None:
             os.environ[key] = val
 
 
-# Load .env from cwd on import — makes keys available without sourcing
-load_dotenv()
-
 # ── Endpoint routing ──────────────────────────────────────────────────────────
 
 ENDPOINT_BASE: dict[str, str] = {
@@ -231,13 +228,25 @@ def main(argv: list[str] | None = None) -> None:
 
     args = parser.parse_args(argv)
 
-    # ── Version ────────────────────────────────────────────────────────────
+    # ── Version (before any API call or env loading) ──────────────────────
     if args.version:
-        print("brave_search.py — Hydra Swarm V1.0")
+        print("brave_search.py — Hydra Swarm V0.3")
         return
 
     if not args.query:
         parser.error("the following arguments are required: query")
+
+    # Validate goggles: Brave API allows at most 3 per query
+    if args.goggles and len(args.goggles) > 3:
+        parser.error(
+            f"too many goggles: {len(args.goggles)} (max 3 per Brave API limitation). "
+            f"Combine rules into fewer .goggle files or use inline multi-rule definitions."
+        )
+
+    # Load .env from cwd at runtime — not at import time.
+    # This picks up the project's .env when the script is invoked from any
+    # working directory.  Already-exported env vars take precedence.
+    load_dotenv()
 
     # ── API key ────────────────────────────────────────────────────────────
     api_key = get_api_key(args.endpoint)

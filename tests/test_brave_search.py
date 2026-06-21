@@ -369,23 +369,23 @@ def _hydra_architect_config() -> Path:
 
 
 class TestAgentConfigSearchMandate:
-    """The hydra-architect agent config must mandate brave_search.py as
+    """The hydra-architect agent config must mandate hydra_search.py as
     PRIMARY and forbid brave-web-search MCP as default. These are structural
     requirements — if the config is modified, agents may silently fall back
     to the less-capable MCP tool."""
 
     def test_config_mandates_brave_search_py_as_primary(self):
-        """The agent config must mandate brave_search.py as the mandatory
+        """The agent config must mandate hydra_search.py as the mandatory
         first search instrument. The language must be prescriptive ('MUST',
         'MANDATORY', 'FIRST action') not descriptive ('PRIMARY',
         'recommended', 'preferred')."""
         content = _hydra_architect_config().read_text()
 
-        assert "brave_search.py" in content, (
-            "Agent config must reference brave_search.py by name"
+        assert "hydra_search.py" in content, (
+            "Agent config must reference hydra_search.py by name"
         )
         # The key mandate: "MANDATORY: Your FIRST action for ANY research or
-        # verification task must be to run brave_search.py via bash"
+        # verification task must be to run hydra_search.py via bash"
         assert (
             "MANDATORY" in content
             and ("FIRST action" in content or "first action" in content.lower())
@@ -410,12 +410,12 @@ class TestAgentConfigSearchMandate:
         )
 
     def test_config_has_fallback_instructions(self):
-        """When brave_search.py fails, the config must tell the agent
+        """When hydra_search.py fails, the config must tell the agent
         exactly what to do. The fallback path must be: webfetch → MCP
-        (in that order), with brave_search.py always tried first."""
+        (in that order), with hydra_search.py always tried first."""
         content = _hydra_architect_config().read_text()
 
-        # The new language: "Only if brave_search.py fails ... may you fall
+        # The new language: "Only if hydra_search.py fails ... may you fall
         # back to webfetch ... The MCP ... remains a last-resort fallback"
         assert "fall back" in content.lower(), (
             "Config must describe fallback behavior"
@@ -429,15 +429,15 @@ class TestAgentConfigSearchMandate:
 
     def test_config_invocation_template_is_correct(self):
         """The bash command template in the config must be runnable:
-        ``python skills/hydra-architect/scripts/brave_search.py ...``"""
+        ``python skills/hydra-architect/scripts/hydra_search.py ...``"""
         content = _hydra_architect_config().read_text()
 
         # The exact invocation path the agent is told to use
         assert (
-            "python skills/hydra-architect/scripts/brave_search.py" in content
-            or "python3 skills/hydra-architect/scripts/brave_search.py" in content
+            "python skills/hydra-architect/scripts/hydra_search.py" in content
+            or "python3 skills/hydra-architect/scripts/hydra_search.py" in content
         ), (
-            "Agent config must show the exact bash invocation path for brave_search.py"
+            "Agent config must show the exact bash invocation path for hydra_search.py"
         )
         # Must include the endpoint flag
         assert "--endpoint" in content, (
@@ -620,8 +620,6 @@ def _opencode_available() -> bool:
 def _deploy_agents_and_skills(target: Path) -> None:
     """Deploy hydra-architect agent config and brave_search.py skill into
     a temp project so opencode can find them."""
-    from hydra_swarm.cli import ensure_agents, ensure_skills, _pkg_dir
-    import hydra_swarm.cli as cli_mod
 
     # Copy agent configs to .opencode/agents/
     agents_dst = target / ".opencode" / "agents"
@@ -716,8 +714,8 @@ class TestOpenCodeArchitectSearchIntegration:
     @staticmethod
     def _agent_used_brave_search_py(output: str) -> bool:
         """Return True if the agent output shows evidence it invoked
-        brave_search.py via bash (the PRIMARY search instrument)."""
-        return "brave_search.py" in output
+        hydra_search.py via bash (the PRIMARY search instrument)."""
+        return "hydra_search.py" in output or "brave_search.py" in output
 
     @staticmethod
     def _agent_used_mcp_search(output: str) -> bool:
@@ -740,7 +738,7 @@ class TestOpenCodeArchitectSearchIntegration:
         self, tmp_path, monkeypatch
     ):
         """When API keys are available (project root with .env), the
-        hydra-architect agent MUST use brave_search.py as its PRIMARY
+        hydra-architect agent MUST use hydra_search.py as its PRIMARY
         search instrument. It must NOT use the brave-web-search MCP tool.
 
         This test runs in the project root where .env has BRAVE keys.
@@ -783,12 +781,12 @@ class TestOpenCodeArchitectSearchIntegration:
         if result.returncode == 0 and not combined.strip():
             pytest.skip("OpenCode returned empty output (provider may be unavailable)")
 
-        # THE KEY ASSERTION: agent must use brave_search.py, not MCP
+        # THE KEY ASSERTION: agent must use hydra_search.py, not MCP
         used_brave_py = self._agent_used_brave_search_py(combined)
         used_mcp = self._agent_used_mcp_search(combined)
 
         assert used_brave_py, (
-            f"Agent did NOT use brave_search.py (the PRIMARY search instrument).\n"
+            f"Agent did NOT use hydra_search.py (the PRIMARY search instrument).\n"
             f"Agent output (first 1000 chars):\n{combined[:1000]}"
         )
         assert not used_mcp, (
@@ -875,12 +873,12 @@ class TestOpenCodeArchitectSearchIntegration:
 
 class TestOpenCodeBlueprintSearchIntegration:
     """End-to-end: the blueprint agent has ``bash: deny`` and must use
-    **task subagents** to run brave_search.py. This test verifies the
+    **task subagents** to run hydra_search.py. This test verifies the
     task-subagent pattern works and the agent does not fall back to MCP."""
 
     @staticmethod
     def _agent_used_brave_search_py(output: str) -> bool:
-        return "brave_search.py" in output
+        return "hydra_search.py" in output or "brave_search.py" in output
 
     @staticmethod
     def _agent_used_mcp_search(output: str) -> bool:
@@ -935,18 +933,18 @@ class TestOpenCodeBlueprintSearchIntegration:
             for marker in ("0.136", "release", "version", "PyPI", "GitHub Release")
         )
         assert has_search_results or used_brave_py, (
-            f"Blueprint did NOT produce any search results (no brave_search.py "
+            f"Blueprint did NOT produce any search results (no hydra_search.py "
             f"evidence either). Agent output (first 1000 chars):\n{combined[:1000]}"
         )
 
 
 class TestOpenCodeAdversarySearchIntegration:
     """End-to-end: the adversary agent has ``bash: deny`` and must use
-    **task subagents** to run brave_search.py for CVE verification."""
+    **task subagents** to run hydra_search.py for CVE verification."""
 
     @staticmethod
     def _agent_used_brave_search_py(output: str) -> bool:
-        return "brave_search.py" in output
+        return "hydra_search.py" in output or "brave_search.py" in output
 
     @staticmethod
     def _agent_used_mcp_search(output: str) -> bool:
@@ -1001,6 +999,6 @@ class TestOpenCodeAdversarySearchIntegration:
             for marker in ("CVE-", "vulnerability", "urllib3", "security advisory")
         )
         assert has_search_results or used_brave_py, (
-            f"Adversary did NOT produce any search results (no brave_search.py "
+            f"Adversary did NOT produce any search results (no hydra_search.py "
             f"evidence either). Agent output (first 1000 chars):\n{combined[:1000]}"
         )

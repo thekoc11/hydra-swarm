@@ -8,7 +8,6 @@ checks or write to .hydra_experiments.
 
 import subprocess
 import sys
-from unittest import mock
 
 import pytest
 

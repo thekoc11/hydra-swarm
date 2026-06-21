@@ -118,7 +118,9 @@ hydra run "goal"
   → .hydra_experiments/.preflight_passed must exist (run hydra check first)
   → OpenCode (hydra-architect agent):
     ├─ Verify goal. Adaptive Socratic interrogation.
-    ├─ Two-backend verification (brave_search.py + webfetch)
+    ├─ Perspective Plan checkpoint (claims → combos → user approval)
+    ├─ GATHER phase: hydra_search.py per perspective (cached)
+    ├─ ANALYZE phase: cross-reference index, tag disagreements
     ├─ Two-stage convergence (breadth → depth)
     ├─ Writes ## Architect: contract + directives
     └─ [HYDRA: CONVERGED]
@@ -173,37 +175,67 @@ PRIMARY:
 
 ---
 
-## Two-Backend Verification Architecture (Pillar 2)
+## Two-Phase Verification Architecture — Search Index Protocol (V1.3)
 
-V1.0 deepens Pillar 2 with a dual-layer verification protocol that cross-checks claims against independent search indexes:
+V1.3 upgrades the Architect's verification phase from inline-read interleaving to a structured two-phase protocol backed by a cache-aware search index. The protocol is **PERSPECTIVE PLAN → GATHER → ANALYZE**.
 
-### The Shared Instrument: `brave_search.py`
+### The Search Entrypoint: `hydra_search.py`
 
-Both Hermes and OpenCode agents access the paid Brave Search API through a shared Python wrapper (`skills/hydra-architect/scripts/brave_search.py`, ~270 lines, pure stdlib). It exposes features not available through the built-in `brave-web-search` MCP tool:
+All agents access the paid Brave Search API through a cache-aware wrapper (`skills/hydra-architect/scripts/hydra_search.py`, ~130 lines, pure stdlib). It delegates to `brave_search.py` (~270 lines, also pure stdlib) as the internal backend. Features:
 
-- **Three endpoints**: `llm` (default — pre-extracted text chunks for LLM consumption), `web` (human-oriented results), `news` (release announcements, CVE disclosures)
-- **Freshness filtering**: `pd`/`pw`/`pm`/`py` for time-scoped searches
+- **Three endpoints**: `llm` (pre-extracted text chunks for LLM consumption), `web` (human-oriented results), `news` (release announcements, CVE disclosures)
+- **Freshness filtering**: `pw`/`pm`/`py` for time-scoped searches. **These are nested** — `pw ⊂ pm ⊂ py`, not independent windows.
 - **Goggles**: Up to 3 custom `.goggle` files for domain-level reranking (boost authoritative sources, deprioritize noise)
-- **Token budgets**: `--max-tokens`, `--max-urls`, `--threshold` on the LLM endpoint
+- **Automatic caching**: Strict 4-tuple match `(query, freshness, endpoint, goggle)` against a per-run `search_index_<ts>.md` file. Cache HIT = reuse result, no API call. Cache MISS = call `brave_search.py`, append structured entry.
+- **`--no-cache` flag**: Adversary bypass for independent re-verification. Logs as `independent_verification=true` in the index.
+- **`--claim-id` / `--perspective-id`**: Optional CLI args for cross-referencing during the ANALYZE phase.
 
-### The Cross-Check: Hermes `web_search()`
+### The Search Index Artifact
 
-Hermes additionally runs its built-in `web_search()` (Firecrawl/Tool Gateway index) — a completely independent search index. Same query, different backend.
+Every Level 2+ run produces a per-run audit trail co-located with the lifecycle:
 
-### Resolution
+```
+.hydra_experiments/
+  hydra_lifecycle_20260621_071023.md       ← conclusions (lifecycle)
+  search_index_20260621_071023.md          ← evidence (same timestamp)
+```
 
-| Outcome | Action |
-|---------|--------|
-| Brave + Firecrawl agree | HIGH CONFIDENCE. File the finding. |
-| Brave + Firecrawl diverge | `webfetch` conflicting sources. Check dates, authority. Escalate to user if unresolved. |
+The index is a markdown file with structured headers (machine-parseable by `search_index_lookup.py`) and human-readable bodies. It is created at first `hydra_search.py` call — no manual setup. It dies at end of run. **Cross-run evidence is the Librarian's job (wiki), not the index's.**
 
-### Why Two Backends
+### The Two-Phase Protocol
 
-Verification against a single source is vulnerable to that source's biases. Brave's index might be stale on a particular topic. Firecrawl might miss recent releases. **Agreement across independent indexes is stronger evidence than multiple results from the same index.**
+**PHASE 0 — PERSPECTIVE PLAN (blocking checkpoint):** Architect identifies claims, classifies them (high-risk / adjacent / peripheral), selects multi-perspective combos from the per-claim-type protocol menu in `brave-search-guide.md` §10, and presents the plan to the user. The user may dial perspectives up or down per claim before approving. Depth-gate minimums enforce floors:
 
-OpenCode agents don't have access to a second search index (both `brave-web-search` MCP and `brave_search.py` go through Brave). They compensate via:
-- `webfetch` to pull directly from official sources (docs, PyPI, GitHub releases)
-- The architect's pre-verified, cross-index-checked research in their directive section
+| Level | High-risk claims | Adjacent claims | Peripheral claims |
+|-------|-----------------|-----------------|-------------------|
+| L1 | N/A (index skipped) | N/A | N/A |
+| L2 | ≥1 | ≥1 | 0 |
+| L3 | ≥3 | ≥2 | ≥1 |
+
+**PHASE 1 — GATHER (pure collection):** For each claim and perspective, run `hydra_search.py`. The cache handles duplicates mechanically. No analysis during GATHER — pure evidence collection.
+
+**PHASE 2 — ANALYZE (cross-reference):** Read the full index, group by `claim_id`, compare across `perspective_id`. Identify consensus, outliers, and disagreements tagged per the Disagreement Typology (§11 of the guide):
+
+| Tag | Meaning | Resolution heuristic |
+|-----|---------|---------------------|
+| RECENCY-DRIFT | Fresher perspective disagrees with older | Prefer freshest |
+| SOURCE-BIAS | News vs. academic vs. community lens | Prefer primary sources |
+| DOMAIN-FOCUS | Different goggles report different truths | Both true — file with domain annotations |
+| GENUINE-CONTRADICTION | Two sources in same lens disagree | Escalate as `[NEEDS ADJUDICATION]` |
+
+### Cache Semantics
+
+- **Strict 4-tuple match** only — no semantic similarity, no fuzzy matching. Two queries with different wording but same intent are distinct cache entries (acceptable — the cache is a safety net, not a replacement for Architect judgement).
+- **Markdown store** (not SQLite, not vectorDB) — human-auditable (`cat` works), LLM-native (read inline during ANALYZE), crash-recoverable (append-only, partial writes detectable).
+- **No staleness check** — Hydra runs complete in hours; freshness windows barely budge within a run.
+
+### `brave_search.py` → `hydra_search.py` Migration
+
+`brave_search.py` is now an **internal backend** called by `hydra_search.py` on cache MISS. All agent configs, SKILL.md files, and wiki pages reference `hydra_search.py` as the sole search entrypoint. Direct `brave_search.py` calls bypass the cache and corrupt the audit trail. The `brave-web-search` MCP tool is a last-resort fallback — used only if `hydra_search.py` fails AND `webfetch` is unavailable.
+
+### The Two-Backend Cross-Check (Hermes path only)
+
+Hermes additionally runs its built-in `web_search()` (Firecrawl/Tool Gateway index) — a completely independent search index. Same query, different backend. **Agreement across independent indexes is stronger evidence than multiple results from the same index.** OpenCode path compensates via `webfetch` on official sources (docs, PyPI, GitHub releases) as fallback.
 
 ---
 
@@ -302,6 +334,7 @@ Algorithm: strip common prefixes ("make", "add", "fix", "implement", "create", "
 ├── .preflight_passed          # Sentinel: version + check results. Gates run/proceed/retain/resume.
 ├── current_lifecycle.txt     # Pointer to active lifecycle
 ├── hydra_lifecycle_*.md      # System of record — all phases append here
+├── search_index_*.md         # Per-run evidence audit trail (Level 2+ only, co-timestamped with lifecycle)
 └── ...
 
 skills/                        # Copied by ensure_skills() from package
@@ -343,7 +376,7 @@ skills/                        # Copied by ensure_skills() from package
 | **2026-05-30** | **Adversary stays read-only — reports in terminal** | Fixed `edit: deny` vs. "append to lifecycle" contradiction. Hermes captures via `tmux capture-pane` and writes lifecycle. Auditor writes reports, not ledger entries. |
 | **2026-05-30** | **Adaptive defender threshold** | ≤3 flaws on ≤5 files: Hermes handles directly. Larger: separate OpenCode tmux session. Balances UX against context preservation. |
 | **2026-05-30** | **Two-stage architect convergence** | Stage 1: breadth (full picture). Stage 2: depth (philosophy, intuition, reasoning). Downstream agents inherit rich context. |
-| **2026-05-30** | **Two-backend verification protocol** | Primary: brave_search.py (paid Brave API with freshness/goggles/news). Cross-check: Hermes web_search (Firecrawl index). Agreement = high confidence. |
+| **2026-05-30** | **Two-backend verification protocol → evolved to Two-Phase Search Index Protocol (V1.3)** | Primary: `hydra_search.py` (cache-aware wrapper → `brave_search.py` as internal backend). Cross-check (Hermes path): `web_search` (Firecrawl index). V1.3 adds per-run search index with strict 4-tuple caching, multi-perspective combos, and disagreement typology. |
 | **2026-05-31** | **`--no-hermes` dual-runtime flag** | Additive, opt-in. Hermes remains default. Users can A/B test both runtimes and migrate when ready. Three new OpenCode agent configs created alongside existing Hermes skills. Two code paths in cli.py (Hermes vs OpenCode launch) — accepted because dispatch is 3 lines of if/else. |
 | **2026-06-01** | **Flag inversion: `--no-hermes` → `--use-hermes`. OpenCode becomes default.** | opencode is the better experience (user's assessment). It's the mandatory runtime, checked by `hydra check`. Hermes is an optional enhancement. `--use-hermes` users are power users — acceptable friction. If Hermes absent with `--use-hermes`, fall back to OpenCode with warning (no hard-exit). |
 | **2026-06-01** | **`hydra check` pre-flight subcommand** | Playwright-style explicit setup step. Checks all 5 hard deps at once: tmux, git, opencode, .env, BRAVE_SEARCH_API_KEY. User gets one clear report. Writes `.preflight_passed` sentinel on success. |
@@ -352,7 +385,7 @@ skills/                        # Copied by ensure_skills() from package
 | **2026-06-01** | **`orchestrator.py` marked DEPRECATED** | The old Python state machine (443 lines) is dead code — never called from the new CLI architecture. Retained for reference with a docstring note. |
 | **2026-06-01** | **`rglob` → `glob` for agent discovery** | `ensure_agents()` reverted from `rglob("*.md")` to `glob("*.md")`. `rglob` traversed subdirectories, risking pickup of `.md` files from `.git` or `__pycache__`. |
 | ~~2026-06-01~~ | ~~**`HYDRA_SESSION_TIMEOUT` import hardened**~~ → **SUPERSEDED (2026-06-05)** | The timeout feature was removed entirely. Hardening a feature that no longer exists has no value. |
-| **2026-05-31** | **brave_search.py as mandatory first search tool** | Agent configs rewritten from descriptive ("PRIMARY search instrument") to prescriptive ("MANDATORY: Your FIRST action... must be brave_search.py via bash"). The `brave-web-search` MCP tool is formally deprecated as the default. Without this language, agents default to MCP and ignore the strategic search tool. Fallback chain: brave_search.py → webfetch → MCP (last resort). |
+| **2026-05-31** | **hydra_search.py as mandatory first search tool** | Agent configs rewritten from descriptive ("PRIMARY search instrument") to prescriptive ("MANDATORY: Your FIRST action... must be hydra_search.py via bash"). The `brave-web-search` MCP tool is formally deprecated as the default. Without this language, agents default to MCP and ignore the strategic search tool. Fallback chain: hydra_search.py → webfetch → MCP (last resort). |
 | ~~2026-05-31~~ | ~~**`HYDRA_SESSION_TIMEOUT` env var**~~ → **SUPERSEDED (2026-06-05)** | The env var and timeout mechanism were removed entirely. Sessions now run indefinitely — users monitor via tmux. |
 | **2026-05-31** | **Exit code propagation from launch functions** | `_launch_opencode` and `_launch_hermes` now capture `CompletedProcess`, check `result.returncode`, and `sys.exit(result.returncode)` on non-zero. Prevents silent continuation after agent crashes. |
 | **2026-05-31** | **`rglob` for agent discovery** | `ensure_agents()` changed from `glob("*.md")` to `rglob("*.md")` — agent configs in subdirectories are now auto-discovered. **Reverted 2026-06-01**: `rglob` traversed subdirectories, risking .md files from `.git`/`__pycache__`. Back to `glob("*.md")`. |
@@ -360,3 +393,26 @@ skills/                        # Copied by ensure_skills() from package
 | **2026-06-05** | **`hydra continue` command** | Paginated session browser (20 sessions, 5 per page). Interactive selection to resume via `opencode -s <id>` (default) or `hermes --continue <id> chat` (`--use-hermes`). `--fork` flag for opencode (silently ignored for hermes). No preflight gate, no `.hydra_experiments` writes, no agent/skill setup. Parses tabular output from `opencode session list` / `hermes sessions list` with fail-safe raw-output fallback on parse failure. 26 new tests in `tests/test_continue.py`. |
 | **2026-06-05** | **OpenCode v1.16.0 credential store detection** | `_opencode_available()` guard now checks `~/.local/share/opencode/auth.json` (v1.16+'s `/connect` command store) as primary credential check. Removed `~/.config/opencode/` directory check (MCP config only). Fixes false-positive guard on machines with OpenCode installed but no env-var API keys, which caused integration tests to launch agents that hung indefinitely. |
 | **2026-06-05** | **`@pytest.mark.slow` for live-LLM integration tests** | 4 integration tests in `test_brave_search.py` marked `slow` — timeouts reduced to 60-120s. Use `-m "not slow"` to skip during development. `slow` marker registered in `pyproject.toml` `[tool.pytest.ini_options]`. Full suite with `--run-slow`: 171/171 pass. |
+| **2026-06-21** | **Two-Phase Search Index Protocol (V1.3)** | Replaces the Architect's inline-read interleaving with PERSPECTIVE PLAN → GATHER → ANALYZE. The search index is a per-run markdown file with structured headers — human-auditable, LLM-native, crash-recoverable. Cache is strict 4-tuple exact match, mechanically enforced. |
+| **2026-06-21** | **`hydra_search.py` cache-aware wrapper** | All search calls go through `hydra_search.py` — it checks the index for a 4-tuple match before calling `brave_search.py` (now an internal backend). Mechanical enforcement eliminates prompt-compliance failure modes. `--no-cache` flag for Adversary independent re-verification. |
+| **2026-06-21** | **Intentional combos (Version 2), not cartesian product** | The cartesian product (3 freshness × 4 endpoints × 4 goggles = 48 combinations) is mostly noise at paid API cost. Intentional combos (2–3 per claim type, from per-protocol menu in `brave-search-guide.md` §10) probe orthogonal perspectives (temporal, authoritative, community). Query diversity > backend diversity for accuracy (arXiv 2606.17209). |
+| **2026-06-21** | **Disagreement typology: RECENCY-DRIFT, SOURCE-BIAS, DOMAIN-FOCUS, GENUINE-CONTRADICTION** | The four types encode causal sources of disagreement, not surface features. Each carries a resolution heuristic (prefer freshest, prefer primary sources, both are true, escalate). `UNCLASSIFIED` as a fifth tag for edge cases. |
+| **2026-06-21** | **Depth gate by perspectives (not binary)** | Minimum perspectives per claim vary by risk tier and task level: Level 3 high-risk ≥3 perspectives, adjacent ≥2, peripheral ≥1. Floors are mandatory; no ceiling (user reviews at Perspective Plan checkpoint). |
+| **2026-06-21** | **Markdown store for search index (not SQLite)** | Markdown meets every requirement: human-auditable (`cat` works), LLM-native (read inline during ANALYZE), crash-recoverable (append-only, partial writes detectable). SQLite trades auditability for concurrency/scale we don't need (~30 rows/run). VectorDB semantic matching explicitly rejected — risks false-positive cache hits. |
+| **2026-06-21** | **No QMD indexing of search_index.md** | Search index is per-run audit trail, not institutional knowledge. QMD indexing would conflate "evidence for this run" with "knowledge for the project" — stale version claims could become permanent knowledge by accident. Cross-run evidence is the Librarian's job (wiki). |
+| **2026-06-21** | **Level 1 skips the index entirely** | Level 1 tasks (≤2 files, no security, no data) get a single top-result line in the lifecycle. A separate index artifact is overkill — the blast radius of a wrong Level 1 claim is small, obvious, and reversible. |
+| **2026-06-21** | **No raw JSON preservation** | The markdown summary captures decision-relevant content (title, URL, key finding, page_age). Raw JSON adds ~10× storage overhead with metadata noise. If forensic audit ever needs the raw response, the query can be replayed — Brave results are deterministic within freshness windows. |
+| **2026-06-21** | **Tmux session names include lifecycle slug** | Fixed names (`hydra_bp`, `hydra_adv`, `hydra_def`) collide across concurrent projects. Now includes slug: `hydra_bp_<slug>`, `hydra_adv_<slug>`, `hydra_def_<slug>`. The conductor reads `## Slug` from the lifecycle. |
+| **2026-06-21** | **Guide stays `brave-search-guide.md` (not renamed)** | The guide teaches Brave API strategy — what endpoints do, when to use freshness, what each goggle prioritizes. `hydra_search.py` is the Hydra-level wrapper. Named for content, not caller. PostgreSQL tuning guides don't rename when you put a connection pooler in front of them. |
+| **2026-06-21** | **Dual-tree co-location: `skills/` + `src/hydra_swarm/skills/`** | Builder edits both the canonical source (`src/hydra_swarm/skills/`) and the runtime mirror (`skills/`) in parallel to prevent divergence warnings. `.gitignore` updated with `/skills/` so the runtime mirror is never committed — canonical source is `src/hydra_swarm/`. |
+| **2026-06-21** | **`conftest.py` with `--slow` pytest flag** | Registers `--slow` CLI flag (sugar over `-m slow`). Slow-marked E2E tests (real Brave API calls) are skipped without `--slow`. |
+| **2026-06-21** | **`--claim-id` / `--perspective-id` CLI args for cross-referencing** | Added to `hydra_search.py` to populate the search index header fields the ANALYZE phase needs to group and compare perspectives by claim. Without these, all entries shared `claim_id="auto"` — impossible to cross-reference. |
+
+---
+
+## Known Issues — HYDRA_DISCOVERIES (V1.3)
+
+| # | Discovery | Severity | Resolution |
+|---|-----------|----------|------------|
+| 1 | **`src/hydra_swarm/skills/` and `src/hydra_swarm/agents/` are stale V1.0 snapshots** — 25-line drift from runtime counterparts (`skills/` and `.opencode/agents/`). `pip install hydra-swarm` ships different (older) agent configs than what runs in the dev repo. | HIGH | Needs one-shot sync pass across ~14 files, or build-time copy step (`cp -r skills/ src/hydra_swarm/skills/`) before packaging. Out of scope for search-index lifecycle. |
+| 2 | **`uv.lock` is stale** — reports version 1.2.0 while `pyproject.toml` is at 1.3.0. Not currently tracked by git but should be after regeneration. | LOW | Run `uv lock` to regenerate with 1.3.0, then `git add uv.lock`. |

@@ -6,10 +6,6 @@ Covers flaws: #6 (slug stopword fallback), #7 (env is_file),
 #2 (TOCTOU fstat), #3 (stderr flush), #5 (detect_phase empty lifecycle).
 """
 
-import os
-import stat
-import sys
-from pathlib import Path
 
 import pytest
 
@@ -95,7 +91,7 @@ class TestEnvIsFile:
         # Mock shutil.which so tmux/git/opencode all pass
         monkeypatch.setattr(cli_mod.shutil, "which", lambda x: "/usr/bin/" + x)
 
-        passed, failed = cli_mod._run_preflight_checks()
+        passed, failed, _status = cli_mod._run_preflight_checks()
         assert "env_file" in failed, f"Expected env_file in failed, got {failed}"
         assert not passed
 
@@ -108,7 +104,7 @@ class TestEnvIsFile:
 
         monkeypatch.setattr(cli_mod.shutil, "which", lambda x: "/usr/bin/" + x)
 
-        passed, failed = cli_mod._run_preflight_checks()
+        passed, failed, _status = cli_mod._run_preflight_checks()
         assert "env_file" not in failed, f"env_file should not be in failed for regular file: {failed}"
 
 
@@ -404,8 +400,10 @@ class TestUseHermesWithCheck:
         import hydra_swarm.cli as cli_mod
 
         monkeypatch.chdir(tmp_path)
-        monkeypatch.setattr(cli_mod, "_run_preflight_checks", lambda: (True, []))
-        monkeypatch.setattr(cli_mod, "_write_preflight_sentinel", lambda x: None)
+        monkeypatch.setattr(cli_mod, "_run_preflight_checks",
+                            lambda: (True, [], {}))
+        monkeypatch.setattr(cli_mod, "_write_preflight_sentinel",
+                            lambda x, status=None: None)
 
         cli_mod.main(["--use-hermes", "check"])
 

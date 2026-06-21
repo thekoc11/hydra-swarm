@@ -217,3 +217,148 @@ Snippets can be outdated, truncated, or wrong.
 | **API key missing** | Report clearly to the user. Don't silently fall back to another tool. |
 | **Stale results** (too old) | Tighten freshness (`pm` → `pw`) or add `$discard` to filter low-quality domains. |
 | **Conflicting results** | Report: "[DIVERGENCE] Source A claims X, Source B claims Y." Escalate to user if material. |
+
+---
+
+## 10. Multi-Perspective Verification Protocols
+
+For Level 2+ tasks, run multiple perspectives per claim instead of a single search. Each perspective probes a different dimension of the claim. Cross-referencing these produces:
+- **Consensus** — all perspectives agree → HIGH CONFIDENCE
+- **Tagged disagreements** — see §11 Disagreement Typology
+
+Perspectives are selected from the protocols below based on the claim type.
+
+---
+
+**Protocol: Library Version / Release (current stable)**
+
+| # | Role | Freshness | Endpoint | Goggle | What it catches |
+|---|------|-----------|----------|--------|-----------------|
+| 1 | RECENCY | `pw` | `news` | `hydra-releases` | Brand-new releases (≤7 days), breaking changes, last-minute patches |
+| 2 | DEPTH | `py` | `web` | `hydra-tech-docs` | Long-term stable version, official docs, authoritative reference |
+| 3 | BREADTH | `pm` | `web` | `none` | Community discussion, blog posts, "what version to use" threads — wide signal |
+
+**When to run all 3:** Level 3, version is security-adjacent (e.g., a library with recent CVEs).
+**When to run 2:** Level 2. Skip BREADTH (community signal is noisy for version checks).
+**Minimum:** ≥1 (RECENCY for level 2, RECENCY+DEPTH for level 3 baseline).
+
+**Typical disagreements:**
+- RECENCY finds 0.115.1 (released 3 days ago); DEPTH finds 0.115.0 (docs haven't updated). Tag: RECENCY-DRIFT. Resolution: prefer 0.115.1, note that docs lag.
+- BREADTH finds community recommending 0.114.x because of a known 0.115.x bug. Tag: SOURCE-BIAS (community has different risk tolerance). Resolution: file both, note the community concern.
+
+---
+
+**Protocol: Security Vulnerability / CVE**
+
+| # | Role | Freshness | Endpoint | Goggle | What it catches |
+|---|------|-----------|----------|--------|-----------------|
+| 1 | IMMEDIATE | `pw` | `news` | `hydra-security` | Brand-new CVE disclosures this week, zero-days, active exploitation |
+| 2 | CONTEXT | `pm` | `news` | `hydra-security` | Recent CVE landscape, patching history, recurring vulnerability patterns |
+| 3 | DEPTH | `py` | `web` | `hydra-academic` | Architectural analysis, security posture research, academic vulnerability taxonomies |
+
+**When to run all 3:** Level 3, any security claim.
+**When to run 2:** Level 2. Skip DEPTH (academic analysis is comprehensive but not urgent).
+**Minimum:** ≥3 for Level 3 high-risk security claims; ≥2 for Level 3 adjacent claims; ≥1 for Level 2.
+
+**Typical disagreements:**
+- IMMEDIATE finds CVE-2026-XXXX (critical, unpatched); CONTEXT finds it was patched yesterday. Tag: DOMAIN-FOCUS (both true — CVE exists, patch exists). Resolution: file both, note the patch availability.
+- DEPTH finds architectural criticism of the library's security model; IMMEDIATE finds no active CVEs. Tag: SOURCE-BIAS (academic analysis is forward-looking, news is incident-driven). Resolution: note the architectural concern even though no active exploits.
+
+---
+
+**Protocol: API Pattern / Best Practice**
+
+| # | Role | Freshness | Endpoint | Goggle | What it catches |
+|---|------|-----------|----------|--------|-----------------|
+| 1 | AUTHORITATIVE | `py` | `llm` | `hydra-tech-docs` | Official API reference, docs, signature — pre-extracted LLM content |
+| 2 | COMMUNITY | `pm` | `web` | `none` | Stack Overflow, community blogs, current practice — broad, no goggle |
+| 3 | EVOLUTION | `pw` | `news` | `hydra-tech-docs` | Recent API changes, deprecations, migration guides |
+
+**When to run all 3:** Level 3, API pattern is security-adjacent (e.g., authentication middleware).
+**When to run 2:** Level 2. Skip EVOLUTION (recent changes are noise for stable patterns).
+**Minimum:** ≥1 for Level 2; ≥2 for Level 3 (AUTHORITATIVE + COMMUNITY at minimum).
+
+**Typical disagreements:**
+- AUTHORITATIVE shows the official pattern (uses `lifespan`); COMMUNITY shows a different pattern (uses `@app.on_event`). Tag: RECENCY-DRIFT (community hasn't updated to the newer pattern). Resolution: prefer authoritative, note community lag.
+- EVOLUTION shows a migration guide recommending pattern X; AUTHORITATIVE shows pattern Y as current. Tag: RECENCY-DRIFT (migration guide is forward-looking). Resolution: prefer current authoritative.
+
+---
+
+**Protocol: Deprecation Notice**
+
+| # | Role | Freshness | Endpoint | Goggle | What it catches |
+|---|------|-----------|----------|--------|-----------------|
+| 1 | IMMEDIATE | `pw` | `news` | `hydra-releases` | Deprecation announcements this week |
+| 2 | MIGRATION | `py` | `web` | `hydra-tech-docs` | Migration guides, upgrade documentation, replacement APIs |
+| 3 | COMMUNITY-IMPACT | `pm` | `web` | `none` | Community reaction, workarounds, "what to use instead" threads |
+
+**When to run all 3:** Level 3, deprecation affects a security-sensitive component.
+**When to run 2:** Level 2. Skip COMMUNITY-IMPACT.
+**Minimum:** ≥1 for Level 2; ≥2 for Level 3 (IMMEDIATE + MIGRATION at minimum).
+
+---
+
+**Protocol: Academic Claim**
+
+| # | Role | Freshness | Endpoint | Goggle | What it catches |
+|---|------|-----------|----------|--------|-----------------|
+| 1 | PRIMARY | `py` | `web` | `hydra-academic` | ArXiv papers, scholar results, .edu domains |
+| 2 | CITATION-CONTEXT | `py` | `web` | `none` | Broader web for citation context, meta-analyses, who cites this |
+| 3 | RECENT | `pm` | `news` | `hydra-academic` | Recent academic news, conference proceedings, retractions |
+
+**When to run all 3:** Level 3, claim is load-bearing for an architectural decision.
+**When to run 2:** Level 2. Skip RECENT.
+**Minimum:** ≥1 for Level 2; ≥2 for Level 3 (PRIMARY + CITATION-CONTEXT).
+
+---
+
+**Protocol: Market / Community Research**
+
+| # | Role | Freshness | Endpoint | Goggle | What it catches |
+|---|------|-----------|----------|--------|-----------------|
+| 1 | TREND | `py` | `news` | `none` | Broadest lens, no goggle for maximum diversity and temporal sweep |
+| 2 | DEEP | `pm` | `web` | `none` | Web-level depth, blog posts, company announcements, product pages |
+| 3 | AUTHORITY | `py` | `web` | `hydra-tech-docs` | Authoritative sources to ground the trend data |
+
+**When to run all 3:** Level 3, research is decision-critical (e.g., choosing between frameworks).
+**When to run 2:** Level 2. Run TREND + DEEP; skip AUTHORITY.
+**Minimum:** ≥1 for Level 2; ≥2 for Level 3.
+
+---
+
+**Protocol: Package Compatibility Matrix**
+
+| # | Role | Freshness | Endpoint | Goggle | What it catches |
+|---|------|-----------|----------|--------|-----------------|
+| 1 | RELEASE | `pw` | `news` | `hydra-releases` | Recent releases that affect compatibility |
+| 2 | DOCS | `py` | `llm` | `hydra-tech-docs` | Official compatibility docs, version matrices |
+| 3 | COMMUNITY | `pm` | `web` | `none` | Community reports, "does X work with Y 3.0" threads |
+
+**When to run all 3:** Level 3, compatibility issue is blocking (e.g., upgrading Django).
+**When to run 2:** Level 2. RELEASE + DOCS; skip COMMUNITY.
+**Minimum:** ≥1 for Level 2; ≥2 for Level 3.
+
+---
+
+**Protocol: General Factual Claim (fallback — use when no specific protocol matches)**
+
+| # | Role | Freshness | Endpoint | Goggle | What it catches |
+|---|------|-----------|----------|--------|-----------------|
+| 1 | AUTHORITATIVE | `py` | `web` | `hydra-tech-docs` | Most authoritative results first |
+| 2 | BREADTH | `pm` | `web` | `none` | Broader search for corroboration |
+
+**Minimum:** ≥1 for Level 2; ≥2 for Level 3. If the claim falls under a specific domain after further analysis, switch to the relevant protocol above.
+
+---
+
+## 11. Disagreement Typology
+
+When cross-referencing multiple perspectives in the ANALYZE phase, disagreements are tagged with one of:
+
+| Tag | Meaning | Action |
+|-----|---------|--------|
+| RECENCY-DRIFT | A fresher perspective disagrees with an older one — recent change | Prefer the freshest result. The older result was correct at its time; it's not wrong, it's stale. File the most recent finding with a note. |
+| SOURCE-BIAS | Different source types disagree due to editorial slant or risk tolerance | Prefer primary sources. News simplifies; academic/web sources are more precise for technical claims. File both but weight the primary-source perspective higher. |
+| DOMAIN-FOCUS | Different goggles report different truths — both correct, different lenses | Both are true. The security lens sees vulnerability; the releases lens sees patch. File both with domain annotation — truth is multidimensional. |
+| GENUINE-CONTRADICTION | Two sources in the same lens disagree — needs adjudication | Escalate. Mark as `[NEEDS ADJUDICATION]`. Two sources with same lens and freshness disagreeing is a real evidence conflict requiring human resolution. |
+| UNCLASSIFIED | Edge case that doesn't fit the above | Architect's discretion. Explain the reasoning in the claim. File both perspectives and note the classification choice. |

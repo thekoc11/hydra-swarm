@@ -30,9 +30,9 @@ Tests created: N. Passing: N.
 
 ## THE VERIFIED KNOWLEDGE MANDATE
 
-Your PRIMARY search instrument is `brave_search.py`, invoked via bash:
+Your PRIMARY search instrument is `hydra_search.py`, invoked via bash:
 ```
-python skills/hydra-architect/scripts/brave_search.py "<query>" --endpoint <web|news|llm> --freshness <pw|pm|py> --goggles <goggle>
+python skills/hydra-architect/scripts/hydra_search.py "<query>" --endpoint <web|news|llm> --freshness <pw|pm|py> --goggles <goggle>
 ```
 
 Load `skills/hydra-architect/references/brave-search-guide.md` for endpoint

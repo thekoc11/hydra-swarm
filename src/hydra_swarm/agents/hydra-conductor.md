@@ -44,14 +44,14 @@ self-contained.
 
 ---
 
-## VERIFICATION TOOL — brave_search.py
+## VERIFICATION TOOL — hydra_search.py
 
 **MANDATORY: Your FIRST action for ANY verification task must be to run
-`brave_search.py` via bash. You are PROHIBITED from using any other search
-tool until brave_search.py has been attempted.**
+`hydra_search.py` via bash. You are PROHIBITED from using any other search
+tool until hydra_search.py has been attempted.**
 
 ```
-python skills/hydra-architect/scripts/brave_search.py "<query>" --endpoint <web|news|llm> --freshness <pw|pm|py> --goggles <goggle>
+python skills/hydra-architect/scripts/hydra_search.py "<query>" --endpoint <web|news|llm> --freshness <pw|pm|py> --goggles <goggle>
 ```
 
 Load `skills/hydra-architect/references/brave-search-guide.md` for endpoint
@@ -59,9 +59,9 @@ routing strategy, query construction patterns, freshness selection, and
 domain-specific goggle guidance.
 
 **The `brave-web-search` MCP tool is a SECONDARY FALLBACK ONLY — NEVER use it
-first.** Using MCP before brave_search.py is a protocol violation.
+first.** Using MCP before hydra_search.py is a protocol violation.
 
-**Fallback ordering:** Only if brave_search.py fails (non-zero exit code or
+**Fallback ordering:** Only if hydra_search.py fails (non-zero exit code or
 error output) may you fall back to `webfetch` on official sources. The MCP
 `brave-web-search` tool remains a last-resort fallback.
 
@@ -91,13 +91,15 @@ If the pipeline includes `[impl]`:
    the Architect phase).
 
 2. **Launch blueprint in tmux:**
+   The conductor reads `## Slug` from the lifecycle to construct disambiguated
+   session names (prevents collisions across concurrent projects).
    ```
-   tmux new-session -d -s hydra_bp opencode --agent blueprint
+   tmux new-session -d -s hydra_bp_<slug> opencode --agent blueprint
    ```
    The `-d` flag detaches immediately — the conductor does not block.
 
 3. **Tell the user:**
-   > "Blueprint session launched. Attach: `tmux attach -t hydra_bp`. Blueprint will
+   > "Blueprint session launched. Attach: `tmux attach -t hydra_bp_<slug>`. Blueprint will
    > plan the implementation, then spawn the builder as a Task subagent. Builder gets
    > its own permissions (edit:allow, bash:allow) from `.opencode/agents/builder.md`.
    > Detach (Ctrl+B D) and tell me 'done' when the phase is complete."
@@ -105,7 +107,7 @@ If the pipeline includes `[impl]`:
 4. **Wait** for the user to say "done."
 
 5. **On "done":**
-   - `tmux kill-session -t hydra_bp`
+   - `tmux kill-session -t hydra_bp_<slug>`
    - Read the lifecycle. Verify `[BLUEPRINT: COMPLETE]` and `[BUILDER: COMPLETE]`
      tags are present (LLM comprehension, not regex).
    - If tags present → proceed to next phase.
@@ -127,14 +129,14 @@ If the pipeline includes `[adversary]`:
 
 2. **Launch adversary in tmux:**
    ```
-   tmux new-session -d -s hydra_adv opencode --agent adversary
+   tmux new-session -d -s hydra_adv_<slug> opencode --agent adversary
    ```
-    Adversary has `edit: deny, bash: deny, websearch: allow` — truly read-only.
-    It uses task subagents to run brave_search.py for vulnerability verification.
-    It reports flaws in terminal only. It does NOT write the lifecycle.
+     Adversary has `edit: deny, bash: deny, websearch: allow` — truly read-only.
+     It uses task subagents to run hydra_search.py for vulnerability verification.
+     It reports flaws in terminal only. It does NOT write the lifecycle.
 
 3. **Tell the user:**
-   > "Adversary session launched. Attach: `tmux attach -t hydra_adv`. The adversary
+   > "Adversary session launched. Attach: `tmux attach -t hydra_adv_<slug>`. The adversary
    > is read-only — it finds flaws and reports them in the terminal. It does not write
    > any files. Detach and tell me 'done' when it finishes."
 
@@ -195,7 +197,7 @@ If the pipeline includes `[adversary]`:
    Message role is `json_extract(m.data, '$.role')`. Text content is in
    `part` rows where `json_extract(p.data, '$.type') = 'text'`.
 
-   **FALLBACK only if database fails:** `tmux capture-pane -t hydra_adv -p -S -1000`.
+    **FALLBACK only if database fails:** `tmux capture-pane -t hydra_adv_<slug> -p -S -1000`.
    The TUI capture is unreliable with OpenCode's rendering — ANSI codes, wrapping
    artifacts, and truncated lines. Use only as a last resort.
 
@@ -211,7 +213,7 @@ If the pipeline includes `[adversary]`:
    ```
    Write this section to the lifecycle.
 
-6. `tmux kill-session -t hydra_adv`
+6. `tmux kill-session -t hydra_adv_<slug>`
 
 ---
 
@@ -270,7 +272,7 @@ After greenlighting:
 
 2. Launch in tmux:
    ```
-   tmux new-session -d -s hydra_def opencode --agent defender
+   tmux new-session -d -s hydra_def_<slug> opencode --agent defender
    ```
 
 3. Tell the user to attach, work, detach, and say "done."
